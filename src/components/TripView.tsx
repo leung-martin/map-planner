@@ -7,8 +7,7 @@ import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
 import { useScoring } from '../useScoring';
 import {
-  addCity, addDay, addPlace, addPlaces, assignGroups, dayColor, dayNumber, removeCity, removePlace, updatePlace,
-  UNSCHEDULED_COLOR,
+  addCity, addDay, addPlace, addPlaces, assignGroups, dayColor, dayNumber, MAYBE_COLOR, removeCity, removePlace, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { AutoGroupDialog } from './AutoGroupDialog';
@@ -137,7 +136,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
         id: place.id,
         placeId: place.placeId,
         location: info.location,
-        color: day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : UNSCHEDULED_COLOR,
+        color: day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : MAYBE_COLOR,
         label: day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
         title: info.name,
         selected: place.id === selectedId && !preview,
@@ -327,7 +326,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
         )}
         {maybes.length > 0 && (
           <section>
-            <h3 className="day-heading"><span className="grow">Maybe</span><span className="muted small">{maybes.length}</span></h3>
+            <h3 className="day-heading"><span className="grow maybe-label">Maybe</span><span className="muted small">{maybes.length}</span></h3>
             <ul>{maybes.map(placeItem)}</ul>
           </section>
         )}

@@ -14,6 +14,8 @@
   --accent-fill: #bd5508;
   --accent-rule: #f28a1e;
   --on-accent: #fff;
+  --maybe: #8f6b00;
+  --maybe-fill: #b38600;
   --focus: #1d4ed8;
   --link: #1a48c4;
   --danger: #a82a12;
@@ -36,6 +38,7 @@
   --scrim: rgb(5 9 14 / 48%);
   --field: rgb(255 255 255 / 9%);
   --accent: #ffa657;
+  --maybe: #dcae1d;
   --focus: #8ab4ff;
   --link: #8ab4ff;
   --danger: #ff9a85;
@@ -258,8 +261,11 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .place-name, .place-location { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .place-name { font-weight: 500; font-size: 1.08rem; }
 .maps-link { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px; font-size: 0.92rem; color: var(--link); white-space: nowrap; }
-.star { flex: none; width: 34px; min-height: 36px; padding: 0; border: 0; background: none; font-size: 1.35rem; line-height: 1; color: var(--muted); }
+.star { flex: none; width: 34px; min-height: 36px; padding: 0; border: 0; background: none; font-size: 1.35rem; line-height: 1; color: var(--maybe); }
 .star.on { color: var(--accent-rule); }
+.maybe-label { color: var(--maybe); }
+.maybe-button { background: var(--maybe-fill); border-color: var(--maybe-fill); color: #1a1300; font-weight: 600; }
+.card.maybe { border-left: 4px solid var(--maybe-fill); }
 .score-status { margin-top: 8px; }
 .score-strip { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .place > .score-strip { padding-left: 42px; }
@@ -310,14 +316,16 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .dialog-hint { margin-top: 10px; }
 
 /* Pins are shared by the Google map and the demo map. */
-.pin { width: 30px; height: 30px; padding: 0; margin-bottom: 6px; display: grid; place-items: center; border-radius: 50% 50% 50% 0; border: 2px solid #fff; background: var(--pin-color); transform: rotate(-45deg); box-shadow: 0 2px 5px rgb(0 0 0 / 40%); cursor: pointer; min-height: 0; }
-.pin span { transform: rotate(45deg); color: #fff; font-size: 13px; font-weight: 600; }
-.pin-selected { outline: 3px solid #fbbf24; outline-offset: 0; }
+.pin { width: 38px; height: 38px; padding: 0; margin-bottom: 8px; display: grid; place-items: center; border-radius: 50% 50% 50% 0; border: 3px solid #fff; background: var(--pin-color); transform: rotate(-45deg); box-shadow: 0 2px 6px rgb(0 0 0 / 45%); cursor: pointer; min-height: 0; }
+/* A soft light halo lifts even the darkest day colors off a dark map. */
+:root[data-theme='dark'] .pin { box-shadow: 0 0 0 2px rgb(0 0 0 / 75%), 0 0 16px 6px rgb(255 255 255 / 60%), 0 3px 8px rgb(0 0 0 / 70%); }
+.pin span { transform: rotate(45deg); color: #fff; font-size: 16px; font-weight: 600; }
+.pin-selected { outline: 3px solid #fbbf24; outline-offset: 1px; }
 
 .demo-map { overflow: hidden; background: linear-gradient(#0000 49px, var(--demo-grid) 50px) 0 0 / 50px 50px, linear-gradient(90deg, #0000 49px, var(--demo-grid) 50px) 0 0 / 50px 50px, var(--demo-bg); }
 .demo-map-note { position: absolute; z-index: 5; left: 8px; bottom: 8px; padding: 3px 8px; background: var(--solid); font-size: 0.8rem; color: var(--muted); }
 .demo-poi { position: absolute; min-height: 0; padding: 2px 6px; font-size: 0.78rem; transform: translate(-50%, -50%); white-space: nowrap; background: var(--solid); }
-.demo-pin { position: absolute; z-index: 2; margin: 0; transform: translate(-50%, calc(-100% - 6px)) rotate(-45deg); }
+.demo-pin { position: absolute; z-index: 2; margin: 0; transform: translate(-50%, calc(-100% - 8px)) rotate(-45deg); }
 
 /* The tilted panel of a heads-up display, only where there's room to read it comfortably. */
 @media (min-width: 1000px) and (prefers-reduced-motion: no-preference) {

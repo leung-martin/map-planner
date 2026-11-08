@@ -47,7 +47,7 @@ export function DayBoard({
     return (
       <li key={place.id}>
         <button
-          className={place.id === selectedId ? 'card selected' : 'card'}
+          className={['card', place.id === selectedId && 'selected', !place.mustHave && 'maybe'].filter(Boolean).join(' ')}
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData('text/plain', place.id);

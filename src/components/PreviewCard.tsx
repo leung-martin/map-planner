@@ -42,7 +42,7 @@ export function PreviewCard({ trip, details, existing, defaultCityId, onSave, on
           )}
           <div className="preview-actions">
             <button className="primary grow" onClick={() => onSave(cityId, true)}>★ Must-have</button>
-            <button className="grow" onClick={() => onSave(cityId, false)}>Maybe</button>
+            <button className="grow maybe-button" onClick={() => onSave(cityId, false)}>Maybe</button>
             <button className="text-button" onClick={onCancel}>Cancel</button>
           </div>
         </>

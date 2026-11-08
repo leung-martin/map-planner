@@ -116,7 +116,7 @@ export const DAY_COLORS = [
   '#d92d20', '#1d4ed8', '#047857', '#c2410c', '#7c3aed', '#be185d',
   '#0e7490', '#78350f', '#4d7c0f', '#1e3a8a', '#a21caf', '#475569',
 ];
-export const UNSCHEDULED_COLOR = '#8a8f98';
+export const MAYBE_COLOR = '#b38600';
 
 export function dayColor(day: Day): string {
   return DAY_COLORS[day.colorIndex % DAY_COLORS.length];

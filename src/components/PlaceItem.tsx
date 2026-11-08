@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { PlaceDetails, PlacePhoto } from '../maps/provider';
-import { dayColor, dayNumber, googleMapsUrl, UNSCHEDULED_COLOR } from '../trip';
+import { dayColor, dayNumber, googleMapsUrl } from '../trip';
 import type { SavedPlace, Trip } from '../types';
 import { LazyField } from './LazyField';
 import { ScoreMeters, ScoreStrip } from './Scores';
@@ -64,7 +64,7 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
           </span>
         </button>
         {day && (
-          <span className="dot" style={{ background: day ? dayColor(day) : UNSCHEDULED_COLOR }} title={`Day ${dayNumber(trip, day.id)}`}>
+          <span className="dot" style={{ background: dayColor(day) }} title={`Day ${dayNumber(trip, day.id)}`}>
             {dayNumber(trip, day.id)}
           </span>
         )}
