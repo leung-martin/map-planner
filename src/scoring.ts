@@ -1,6 +1,7 @@
 import type { PlaceScores } from './types';
 
-export const RUBRIC_VERSION = 1;
+// Raising this rescores every saved place once, so all scores come from the same prompt.
+export const RUBRIC_VERSION = 2;
 
 export type DimensionKey = 'visual' | 'entertainment' | 'shopping' | 'culture';
 
@@ -22,23 +23,32 @@ export function buildScorePrompt({ name, area, city }: PlaceToScore): string {
 Place: ${name}
 Location: ${location}
 
-Dimensions:
-- visual: architecture, aesthetics, impressive design, atmosphere, photogenic scenery
-- entertainment: things to do, attractions, interactive experiences, fun, novelty
-- shopping: stores, malls, boutiques, department stores, unique retail
-- culture: history, traditional and local culture, local identity, food, authenticity
+Pick the single level that best matches each description.
 
-Scale:
-0 = absent. 1 = minimal. 2 = minor. 3 = solid, a real reason to go. 4 = a major strength. 5 = among the best of its kind in the country.
+visual (architecture, aesthetics, impressive design, atmosphere, photogenic scenery):
+- visual: 5 = world-famous architecture or scenery people travel specifically to see. 4 = striking and highly photogenic. 3 = attractive and pleasant. 2 = ordinary with some nice features. 1 = plain. 0 = purely functional.
+
+entertainment (things to do, attractions, interactive experiences, fun, novelty):
+- entertainment: 5 = fills a full day with many attractions. 4 = several hours of activities. 3 = one to two hours of things to do. 2 = a brief activity. 1 = little to do besides look around. 0 = nothing to do.
+
+shopping (stores, malls, boutiques, department stores, unique retail):
+- shopping: 5 = a major shopping destination with very many stores. 4 = a large mall or famous shopping street. 3 = a good selection of shops. 2 = a few shops. 1 = a gift shop or kiosk only. 0 = no shopping.
+
+culture (history, traditional and local culture, local identity, food, authenticity):
+- culture: 5 = nationally important historic or cultural site, or a defining local food institution. 4 = strong history or tradition. 3 = clear local character. 2 = some local character. 1 = little local character. 0 = generic or international chain.
 
 Calibration examples (visual, entertainment, shopping, culture):
-- Kinkaku-ji: 5, 1, 1, 5
+- Kinkaku-ji: 5, 2, 1, 5
 - Tokyo Disneyland: 4, 5, 3, 1
-- Ginza Six: 4, 1, 5, 1
+- Ginza Six: 4, 2, 5, 2
 - Senso-ji: 4, 2, 3, 5
 - An ordinary convenience store: 0, 0, 1, 0
 
-Rate by the place's established reputation, not recent trends. Rate each dimension on its own, and use the whole scale. If you don't recognize the place, judge from its name and type and avoid 4 or 5.`;
+Rules:
+- Judge what is true of this place, based on its established, long-standing reputation. Ignore recent trends and personal taste.
+- Rate each dimension on its own. A high score in one says nothing about another.
+- If you are between two levels, choose the lower one.
+- If you don't recognize the place, judge from its name and type, and don't go above 3.`;
 }
 
 export function parseScores(text: string): PlaceScores {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlaceDetails } from './maps/provider';
-import type { Scorer } from './scoring';
+import { RUBRIC_VERSION, type Scorer } from './scoring';
 import { suggestionErrorMessage } from './suggest';
 import type { PlaceScores, SavedPlace, Trip } from './types';
 
@@ -30,7 +30,10 @@ export function useScoring({ scorer, trip, places, details, onScored }: Options)
   scored.current = onScored;
 
   const next = scorer
-    ? places.find((place) => !place.scores && !skipped.current.has(place.id) && typeof details[place.placeId] === 'object')
+    ? places.find(
+        (place) =>
+          (place.scores?.rubric ?? 0) < RUBRIC_VERSION && !skipped.current.has(place.id) && typeof details[place.placeId] === 'object',
+      )
     : undefined;
   const info = next ? (details[next.placeId] as PlaceDetails) : null;
   const city = trip.cities.find((c) => c.id === next?.cityId)?.name ?? '';

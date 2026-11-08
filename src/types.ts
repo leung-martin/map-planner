@@ -23,7 +23,7 @@ export type SavedPlace = {
   dayId: string | null;
   /** Missing on places saved before stars existed. */
   mustHave?: boolean;
-  /** Set once by Gemini in the background, and never refreshed so scores stay stable. */
+  /** Set once by Gemini in the background, and redone only when the rubric version changes. */
   scores?: PlaceScores;
   notes: string;
 };
