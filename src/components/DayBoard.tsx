@@ -2,6 +2,7 @@ import { useState, type DragEvent } from 'react';
 import type { PlaceDetails } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
+import { ScoreStrip } from './Scores';
 
 type Props = {
   trip: Trip;
@@ -64,6 +65,7 @@ export function DayBoard({
             {nameOf(place)}
           </span>
           <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>
+          {place.scores && <ScoreStrip scores={place.scores} />}
         </button>
       </li>
     );

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { googleMapsApiKey, hasFirebase } from './config';
 import { createLocalStore, type TripStore } from './data/store';
-import { demoProvider, demoSuggest } from './maps/demoProvider';
+import { demoProvider, demoScore, demoSuggest } from './maps/demoProvider';
+import type { Scorer } from './scoring';
 import type { Suggester } from './suggest';
 import { createGoogleProvider } from './maps/googleProvider';
 import { Backdrop } from './components/Backdrop';
@@ -16,6 +17,12 @@ const suggest: Suggester | null = provider.demo
   ? demoSuggest
   : hasFirebase
     ? (city, interests) => import('./data/gemini').then((gemini) => gemini.suggestPlaces(city, interests))
+    : null;
+
+const scorer: Scorer | null = provider.demo
+  ? demoScore
+  : hasFirebase
+    ? (place) => import('./data/gemini').then((gemini) => gemini.scorePlace(place))
     : null;
 
 type Backend = typeof import('./data/firebase');
@@ -155,7 +162,7 @@ export function App() {
       <>
         <Backdrop />
         {banner}
-        <TripView key={trip.id} trip={trip} provider={provider} suggest={suggest} onChange={save} />
+        <TripView key={trip.id} trip={trip} provider={provider} suggest={suggest} scorer={scorer} onChange={save} />
       </>
     );
   }

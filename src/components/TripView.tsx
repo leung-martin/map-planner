@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { groupByLocation } from '../autoGroup';
 import { KmlError, parseKml } from '../importKml';
 import type { MapPin, MapsProvider, PlaceDetails, Suggestion } from '../maps/provider';
+import type { Scorer } from '../scoring';
 import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
+import { useScoring } from '../useScoring';
 import {
   addCity, addDay, addPlace, addPlaces, assignGroups, dayColor, dayNumber, removeCity, removePlace, updatePlace,
   UNSCHEDULED_COLOR,
@@ -24,6 +26,7 @@ type Props = {
   trip: Trip;
   provider: MapsProvider;
   suggest: Suggester | null;
+  scorer: Scorer | null;
   onChange(trip: Trip): void;
 };
 
@@ -65,7 +68,7 @@ function usePlaceDetails(provider: MapsProvider, placeIds: string[]) {
   return byId;
 }
 
-export function TripView({ trip, provider, suggest, onChange }: Props) {
+export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   const [step, setStep] = useState<Step>('places');
   const [tab, setTab] = useState(trip.cities[0]?.id ?? ALL);
   const [focus, setFocus] = useState(ALL);
@@ -109,6 +112,14 @@ export function TripView({ trip, provider, suggest, onChange }: Props) {
 
   // Only the open city is looked up, which keeps a large trip well inside the free allowance.
   const details = usePlaceDetails(provider, [...new Set(cityPlaces.map((p) => p.placeId))]);
+
+  const scoringMessage = useScoring({
+    scorer,
+    trip,
+    places: cityPlaces,
+    details,
+    onScored: (id, scores) => update((current) => updatePlace(current, id, { scores })),
+  });
 
   const activeFocus = step === 'days' && (focus === UNSCHEDULED || days.some((d) => d.id === focus)) ? focus : ALL;
   const shown = useMemo(
@@ -307,6 +318,7 @@ export function TripView({ trip, provider, suggest, onChange }: Props) {
       </div>
 
       <div className="list">
+        {scoringMessage && <p className="muted small score-status" role="status">{scoringMessage}</p>}
         {mustHaves.length > 0 && (
           <section>
             <h3 className="day-heading"><span className="grow">★ Must-haves</span><span className="muted small">{mustHaves.length}</span></h3>

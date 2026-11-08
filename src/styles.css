@@ -260,6 +260,15 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .maps-link { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 4px; font-size: 0.92rem; color: var(--link); white-space: nowrap; }
 .star { flex: none; width: 34px; min-height: 36px; padding: 0; border: 0; background: none; font-size: 1.35rem; line-height: 1; color: var(--muted); }
 .star.on { color: var(--accent-rule); }
+.score-status { margin-top: 8px; }
+.score-strip { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.place > .score-strip { padding-left: 42px; }
+.score { white-space: nowrap; }
+.score-meters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 0; }
+.score-meter dt { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.score-meter dd { display: flex; gap: 3px; margin: 3px 0 0; }
+.pip { flex: 1; height: 6px; background: var(--line); }
+.pip.on { background: var(--accent-rule); }
 .next-step { flex: none; padding: 8px 10px; border-top: 1px solid var(--line); }
 .next-step .primary { width: 100%; min-height: 46px; }
 .note-peek { margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

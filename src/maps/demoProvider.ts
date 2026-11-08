@@ -1,5 +1,6 @@
+import { RUBRIC_VERSION, type PlaceToScore } from '../scoring';
 import type { PlaceIdea } from '../suggest';
-import type { Bounds } from '../types';
+import type { Bounds, PlaceScores } from '../types';
 import { DemoMapView } from './DemoMapView';
 import type { MapsProvider, PlaceDetails, Suggestion } from './provider';
 
@@ -52,6 +53,12 @@ const matches = (text: string, query: string) => text.toLowerCase().includes(que
 export async function demoSuggest(cityName: string): Promise<PlaceIdea[]> {
   const cityId = Object.keys(CITIES).find((id) => CITIES[id].name === cityName);
   return DEMO_PLACES.filter((row) => row[3] === cityId).map((row) => ({ name: row[1], why: 'A sample idea for the demo.' }));
+}
+
+/** Made-up but repeatable scores, so the demo needs no Gemini. */
+export async function demoScore({ name }: PlaceToScore): Promise<PlaceScores> {
+  const digit = (seed: number) => [...name].reduce((sum, char) => (sum * seed + char.charCodeAt(0)) % 997, seed) % 6;
+  return { visual: digit(3), entertainment: digit(5), shopping: digit(7), culture: digit(11), rubric: RUBRIC_VERSION };
 }
 
 export const demoProvider: MapsProvider = {

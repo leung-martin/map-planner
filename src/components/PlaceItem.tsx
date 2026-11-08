@@ -3,6 +3,7 @@ import type { PlaceDetails, PlacePhoto } from '../maps/provider';
 import { dayColor, dayNumber, googleMapsUrl, UNSCHEDULED_COLOR } from '../trip';
 import type { SavedPlace, Trip } from '../types';
 import { LazyField } from './LazyField';
+import { ScoreMeters, ScoreStrip } from './Scores';
 
 type Props = {
   trip: Trip;
@@ -72,11 +73,13 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
         </a>
       </div>
 
+      {!expanded && place.scores && <ScoreStrip scores={place.scores} />}
       {!expanded && place.notes && <p className="muted small note-peek">{place.notes}</p>}
 
       {expanded && (
         <div className="place-extra">
           {loaded?.photo && <Photo photo={loaded.photo} name={loaded.name} />}
+          {place.scores && <ScoreMeters scores={place.scores} />}
           <label>
             Note
             <LazyField label="Note" multiline value={place.notes} onCommit={(notes) => onChange({ notes })} />

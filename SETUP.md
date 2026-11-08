@@ -62,7 +62,7 @@ Open that address in Chrome on Android, sign in, then choose **Add to Home scree
 
 ## 6. Gemini suggestions
 
-These use the free Gemini tier through your Firebase project, with no card. Only the city and your interests are sent, and Google may use them to improve its products.
+These use the free Gemini tier through your Firebase project, with no card. Suggestions send the city and your interests. Background scoring sends each place's name and area, one request per place, and saves the result so each place is scored once. Google may use what's sent to improve its products. Sending place names from Google Maps to free Gemini goes against the Google Maps Platform terms, a risk accepted for this personal project.
 
 1. In the Firebase console, open **AI Services > AI Logic**, click **Get started**, and choose the **Gemini Developer API**.
 2. In [Google Cloud reCAPTCHA](https://console.cloud.google.com/security/recaptcha), with your Firebase project selected, enable the API if asked and create a **Web** key. Add the domains `YOUR-FIREBASE-PROJECT.web.app` and `YOUR-FIREBASE-PROJECT.firebaseapp.com`. Leave the checkbox challenge off, and never add `localhost`.
