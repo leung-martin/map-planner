@@ -10,4 +10,6 @@ export const firebaseConfig = {
   appId: env.VITE_FIREBASE_APP_ID as string,
 };
 
+export const recaptchaSiteKey: string = env.VITE_RECAPTCHA_SITE_KEY ?? '';
+
 export const hasFirebase = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);

@@ -1,30 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { groupByLocation } from '../autoGroup';
+import { KmlError, parseKml } from '../importKml';
 import type { MapPin, MapsProvider, PlaceDetails, Suggestion } from '../maps/provider';
+import type { Suggester } from '../suggest';
+import { useTheme } from '../theme';
 import {
-  addCity, addDay, addPlace, addPlaces, dayColor, dayNumber, dayRoute, removeCity, removePlace, updatePlace,
+  addCity, addDay, addPlace, addPlaces, assignGroups, dayColor, dayNumber, removeCity, removePlace, updatePlace,
   UNSCHEDULED_COLOR,
 } from '../trip';
-import type { Bounds, Day, SavedPlace, Trip } from '../types';
-import { KmlError, parseKml, type ParsedKml } from '../importKml';
-import { useTheme } from '../theme';
+import type { Bounds, SavedPlace, Trip } from '../types';
+import { AutoGroupDialog } from './AutoGroupDialog';
+import { DayBoard } from './DayBoard';
 import { DayDialog } from './DayDialog';
 import { ThemeToggle } from './Hud';
-import { ImportDialog } from './ImportDialog';
 import { LazyField } from './LazyField';
 import { PlaceItem } from './PlaceItem';
 import { PreviewCard } from './PreviewCard';
+import { ReviewDialog, type ReviewRequest } from './ReviewDialog';
 import { SearchBox } from './SearchBox';
+import { SuggestDialog } from './SuggestDialog';
 
 type Props = {
   trip: Trip;
   provider: MapsProvider;
+  suggest: Suggester | null;
   onChange(trip: Trip): void;
 };
 
 type Preview = { details: PlaceDetails; fromSearch: boolean };
+type Step = 'places' | 'days';
 
 const ALL = 'all';
 const UNSCHEDULED = 'none';
+const MUST_HAVE_COLOR = '#bd5508';
+const PLACES_PER_DAY = 4;
 
 function usePlaceDetails(provider: MapsProvider, placeIds: string[]) {
   const [byId, setById] = useState<Record<string, PlaceDetails | 'error'>>({});
@@ -56,20 +65,20 @@ function usePlaceDetails(provider: MapsProvider, placeIds: string[]) {
   return byId;
 }
 
-const formatDate = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-
-export function TripView({ trip, provider, onChange }: Props) {
+export function TripView({ trip, provider, suggest, onChange }: Props) {
+  const [step, setStep] = useState<Step>('places');
   const [tab, setTab] = useState(trip.cities[0]?.id ?? ALL);
-  const [dayFilter, setDayFilter] = useState(ALL);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [focus, setFocus] = useState(ALL);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [addingCity, setAddingCity] = useState(trip.cities.length === 0);
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [lookupError, setLookupError] = useState('');
   const [cityBounds, setCityBounds] = useState<Bounds | null>(null);
   const { resolved: theme } = useTheme();
-  const [importing, setImporting] = useState<ParsedKml | null>(null);
+  const [reviewing, setReviewing] = useState<ReviewRequest | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [autoGrouping, setAutoGrouping] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const latest = useRef(trip);
@@ -92,39 +101,35 @@ export function TripView({ trip, provider, onChange }: Props) {
     };
   }, [provider, city?.placeId]);
 
-  const cityPlaces = city ? trip.places.filter((p) => p.cityId === city.id) : trip.places;
+  const cityPlaces = useMemo(
+    () => (city ? trip.places.filter((p) => p.cityId === city.id) : trip.places),
+    [trip.places, city?.id],
+  );
   const days = city ? trip.days.filter((d) => d.cityIds.includes(city.id)) : trip.days;
-  const activeFilter = dayFilter === UNSCHEDULED || days.some((d) => d.id === dayFilter) ? dayFilter : ALL;
 
   // Only the open city is looked up, which keeps a large trip well inside the free allowance.
   const details = usePlaceDetails(provider, [...new Set(cityPlaces.map((p) => p.placeId))]);
 
+  const activeFocus = step === 'days' && (focus === UNSCHEDULED || days.some((d) => d.id === focus)) ? focus : ALL;
   const shown = useMemo(
-    () =>
-      trip.places.filter(
-        (p) =>
-          (!city || p.cityId === city.id) &&
-          (activeFilter === ALL || p.dayId === (activeFilter === UNSCHEDULED ? null : activeFilter)),
-      ),
-    [trip.places, city?.id, activeFilter],
+    () => cityPlaces.filter((p) => activeFocus === ALL || p.dayId === (activeFocus === UNSCHEDULED ? null : activeFocus)),
+    [cityPlaces, activeFocus],
   );
-  const unscheduled = shown.filter((p) => p.dayId === null);
-  const shownDays = activeFilter === ALL ? days : days.filter((d) => d.id === activeFilter);
 
   const pins = useMemo(() => {
     const result: MapPin[] = [];
     for (const place of shown) {
       const info = details[place.placeId];
       if (!info || info === 'error') continue;
-      const day = trip.days.find((d) => d.id === place.dayId);
+      const day = step === 'days' ? trip.days.find((d) => d.id === place.dayId) : undefined;
       result.push({
         id: place.id,
         placeId: place.placeId,
         location: info.location,
-        color: day ? dayColor(day) : UNSCHEDULED_COLOR,
-        label: day ? String(dayNumber(trip, day.id)) : '•',
-        title: place.nickname || info.name,
-        selected: place.id === expandedId && !preview,
+        color: day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : UNSCHEDULED_COLOR,
+        label: day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
+        title: info.name,
+        selected: place.id === selectedId && !preview,
       });
     }
     if (preview) {
@@ -132,24 +137,31 @@ export function TripView({ trip, provider, onChange }: Props) {
         id: 'preview',
         placeId: preview.details.placeId,
         location: preview.details.location,
-        color: '#bd5508',
+        color: MUST_HAVE_COLOR,
         label: '+',
         title: preview.details.name,
         selected: true,
       });
     }
     return result;
-  }, [shown, details, trip, expandedId, preview]);
+  }, [shown, details, trip, selectedId, preview, step]);
 
   const pending = shown.some((p) => details[p.placeId] === undefined);
   const fitKey = [
-    activeTab, activeFilter, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
+    activeTab, activeFocus, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
     preview?.fromSearch ? preview.details.placeId : '',
   ].join('|');
 
+  const goToStep = (next: Step) => {
+    setStep(next);
+    setSelectedId(null);
+    setPreview(null);
+    setFocus(ALL);
+  };
+
   const showPreview = (next: Preview) => {
     setLookupError('');
-    setExpandedId(null);
+    setSelectedId(null);
     setPreview(next);
   };
   const lookupFailed = () => setLookupError('Couldn’t load that place. Check your connection and try again.');
@@ -165,14 +177,26 @@ export function TripView({ trip, provider, onChange }: Props) {
   };
 
   const onPoiClick = (placeId: string) => {
-    if (latest.current.cities.length === 0) return;
+    if (latest.current.cities.length === 0 || step !== 'places') return;
     provider.getPlace(placeId).then((result) => showPreview({ details: result, fromSearch: false })).catch(lookupFailed);
   };
+
+  const previewCityId = city?.id ?? trip.cities[0]?.id ?? '';
 
   const onImportFile = async (file: File) => {
     setLookupError('');
     try {
-      setImporting(parseKml(await file.text()));
+      const parsed = parseKml(await file.text());
+      setReviewing({
+        title: parsed.title ? `Import: ${parsed.title}` : 'Import',
+        pins: parsed.pins,
+        skipped: parsed.skipped,
+        farKm: 1,
+        farNote: 'Far from your original pin, check this one',
+        preselect: true,
+        starByDefault: true,
+        cityId: previewCityId,
+      });
     } catch (reason) {
       setLookupError(reason instanceof KmlError ? reason.message : 'That file couldn’t be opened.');
     }
@@ -183,8 +207,22 @@ export function TripView({ trip, provider, onChange }: Props) {
     update((current) => addDay(current, city?.id ?? lastCity ?? current.cities[0].id));
   };
 
-  const previewCityId = city?.id ?? trip.cities[0]?.id ?? '';
-  const previewDay = trip.days.find((d) => d.id === activeFilter && d.cityIds.includes(previewCityId));
+  const mustHaves = cityPlaces.filter((p) => p.mustHave);
+  const maybes = cityPlaces.filter((p) => !p.mustHave);
+
+  const applyAutoGroup = (dayCount: number, includeMaybes: boolean) => {
+    if (!city) return;
+    const items = (includeMaybes ? cityPlaces : mustHaves).flatMap((place) => {
+      const info = details[place.placeId];
+      return info && info !== 'error' ? [{ id: place.id, location: info.location }] : [];
+    });
+    const groups = groupByLocation(items, dayCount).map((group) => group.map((item) => item.id));
+    update((current) => assignGroups(current, city.id, groups));
+    setAutoGrouping(false);
+    setSelectedId(null);
+    setFocus(ALL);
+  };
+
   const editingDay = trip.days.find((d) => d.id === editingDayId);
 
   const placeItem = (place: SavedPlace) => (
@@ -193,33 +231,121 @@ export function TripView({ trip, provider, onChange }: Props) {
       trip={trip}
       place={place}
       details={details[place.placeId]}
-      expanded={place.id === expandedId}
+      expanded={place.id === selectedId}
       onToggle={() => {
         setPreview(null);
-        setExpandedId(place.id === expandedId ? null : place.id);
+        setSelectedId(place.id === selectedId ? null : place.id);
       }}
       onChange={(patch) => update((current) => updatePlace(current, place.id, patch))}
       onRemove={() => {
         update((current) => removePlace(current, place.id));
-        setExpandedId(null);
+        setSelectedId(null);
       }}
     />
   );
 
-  const dayHeading = (day: Day) => (
-    <h3 className="day-heading">
-      <span className="dot" style={{ background: dayColor(day) }}>{dayNumber(trip, day.id)}</span>
-      <span className="clip grow">
-        {dayRoute(trip, day)}
-        {day.date && <span className="muted small"> · {formatDate(day.date)}</span>}
-      </span>
-      <button className="text-button" aria-label={`Edit day ${dayNumber(trip, day.id)}`} onClick={() => setEditingDayId(day.id)}>
-        Edit
-      </button>
-    </h3>
-  );
-
   const MapView = provider.MapView;
+  const hasCities = trip.cities.length > 0;
+
+  const placesPanel = (
+    <section className="panel">
+      <div className="tools">
+        {addingCity && (
+          <div className="add-city">
+            {!hasCities && <p className="muted small">Which city are you visiting first?</p>}
+            <SearchBox placeholder="Add a city" autoFocus search={provider.searchCities} onPick={pickCity} />
+          </div>
+        )}
+        {hasCities && (
+          <SearchBox
+            placeholder={city ? `Find a place in ${city.name}` : 'Find a place'}
+            search={(query) => provider.searchPlaces(query, cityBounds)}
+            onPick={pickSuggestion}
+          />
+        )}
+        {lookupError && <p className="error-text small">{lookupError}</p>}
+        {preview && (
+          <PreviewCard
+            key={preview.details.placeId}
+            trip={trip}
+            details={preview.details}
+            existing={trip.places.find((p) => p.placeId === preview.details.placeId)}
+            defaultCityId={previewCityId}
+            onCancel={() => setPreview(null)}
+            onShowExisting={(place) => {
+              setPreview(null);
+              if (city && city.id !== place.cityId) setTab(place.cityId);
+              setSelectedId(place.id);
+            }}
+            onSave={(cityId, mustHave) => {
+              update((current) => addPlace(current, { placeId: preview.details.placeId, cityId, dayId: null, mustHave }));
+              if (city && city.id !== cityId) setTab(cityId);
+              setPreview(null);
+            }}
+          />
+        )}
+        {hasCities && (
+          <div className="chips">
+            {suggest && <button className="chip add" onClick={() => setSuggesting(true)}>Suggest places</button>}
+            <button className="chip add" title="Import a KML file exported from Google My Maps" onClick={() => fileInput.current?.click()}>
+              Import from My Maps
+            </button>
+            {/* No accept filter: Android's file picker greys out .kml files when one is set. */}
+            <input
+              ref={fileInput}
+              type="file"
+              hidden
+              aria-label="KML file to import"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = '';
+                if (file) void onImportFile(file);
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="list">
+        {mustHaves.length > 0 && (
+          <section>
+            <h3 className="day-heading"><span className="grow">★ Must-haves</span><span className="muted small">{mustHaves.length}</span></h3>
+            <ul>{mustHaves.map(placeItem)}</ul>
+          </section>
+        )}
+        {maybes.length > 0 && (
+          <section>
+            <h3 className="day-heading"><span className="grow">Maybe</span><span className="muted small">{maybes.length}</span></h3>
+            <ul>{maybes.map(placeItem)}</ul>
+          </section>
+        )}
+        {hasCities && cityPlaces.length === 0 && (
+          <p className="muted empty">Search above, tap a place on the map, or get some suggestions.</p>
+        )}
+        {city && (
+          <button
+            className="text-button danger remove-city"
+            onClick={() => {
+              const count = cityPlaces.length;
+              const warning = count > 0 ? ` Its ${count} saved place${count === 1 ? '' : 's'} will be deleted.` : '';
+              if (window.confirm(`Remove ${city.name} from this trip?${warning}`)) {
+                update((current) => removeCity(current, city.id));
+                setTab(ALL);
+              }
+            }}
+          >
+            Remove {city.name} from this trip
+          </button>
+        )}
+      </div>
+
+      {cityPlaces.length > 0 && (
+        <div className="next-step">
+          <button className="primary" onClick={() => goToStep('days')}>Next: plan your days →</button>
+        </div>
+      )}
+    </section>
+  );
 
   return (
     <div className="trip">
@@ -231,6 +357,14 @@ export function TripView({ trip, provider, onChange }: Props) {
           value={trip.name}
           onCommit={(name) => name.trim() && update((current) => ({ ...current, name: name.trim() }))}
         />
+        <div className="steps" role="group" aria-label="Planning steps">
+          <button className={step === 'places' ? 'step active' : 'step'} aria-pressed={step === 'places'} onClick={() => goToStep('places')}>
+            <b>1</b> Choose places
+          </button>
+          <button className={step === 'days' ? 'step active' : 'step'} aria-pressed={step === 'days'} onClick={() => goToStep('days')}>
+            <b>2</b> Plan days
+          </button>
+        </div>
         <ThemeToggle />
       </header>
 
@@ -246,128 +380,25 @@ export function TripView({ trip, provider, onChange }: Props) {
         <button className="tab add" onClick={() => setAddingCity((open) => !open)}>+ City</button>
       </nav>
 
-      <div className="workspace">
-        <section className="panel">
-          <div className="tools">
-            {addingCity && (
-              <div className="add-city">
-                {trip.cities.length === 0 && <p className="muted small">Which city are you visiting first?</p>}
-                <SearchBox placeholder="Add a city" autoFocus search={provider.searchCities} onPick={pickCity} />
-              </div>
-            )}
-            {trip.cities.length > 0 && (
-              <SearchBox
-                placeholder={city ? `Find a place in ${city.name}` : 'Find a place'}
-                search={(query) => provider.searchPlaces(query, cityBounds)}
-                onPick={pickSuggestion}
-              />
-            )}
-            {lookupError && <p className="error-text small">{lookupError}</p>}
-            {preview && (
-              <PreviewCard
-                key={preview.details.placeId}
-                trip={trip}
-                details={preview.details}
-                existing={trip.places.find((p) => p.placeId === preview.details.placeId)}
-                defaultCityId={previewCityId}
-                defaultDayId={previewDay?.id ?? null}
-                onCancel={() => setPreview(null)}
-                onShowExisting={(place) => {
-                  setPreview(null);
-                  setDayFilter(ALL);
-                  if (city && city.id !== place.cityId) setTab(place.cityId);
-                  setExpandedId(place.id);
-                }}
-                onSave={(cityId, dayId) => {
-                  update((current) => addPlace(current, { placeId: preview.details.placeId, cityId, dayId }));
-                  if (city && city.id !== cityId) setTab(cityId);
-                  setPreview(null);
-                }}
-              />
-            )}
-            {trip.cities.length > 0 && (
-              <div className="chips" role="group" aria-label="Filter by day">
-                <button className={activeFilter === ALL ? 'chip active' : 'chip'} onClick={() => setDayFilter(ALL)}>All</button>
-                {days.map((day) => (
-                  <button
-                    key={day.id}
-                    className={activeFilter === day.id ? 'chip day active' : 'chip day'}
-                    style={{ '--chip-color': dayColor(day) } as React.CSSProperties}
-                    aria-label={`Day ${dayNumber(trip, day.id)}`}
-                    onClick={() => setDayFilter(activeFilter === day.id ? ALL : day.id)}
-                  >
-                    {dayNumber(trip, day.id)}
-                  </button>
-                ))}
-                <button
-                  className={activeFilter === UNSCHEDULED ? 'chip active' : 'chip'}
-                  onClick={() => setDayFilter(activeFilter === UNSCHEDULED ? ALL : UNSCHEDULED)}
-                >
-                  Not scheduled
-                </button>
-                <button className="chip add" onClick={onAddDay}>+ Day</button>
-                <button className="chip add" title="Import a KML file exported from Google My Maps" onClick={() => fileInput.current?.click()}>
-                  Import
-                </button>
-                {/* No accept filter: Android's file picker greys out .kml files when one is set. */}
-                <input
-                  ref={fileInput}
-                  type="file"
-                  hidden
-                  aria-label="KML file to import"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    if (file) void onImportFile(file);
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="list">
-            {(unscheduled.length > 0 || activeFilter === UNSCHEDULED) && (
-              <section>
-                <h3 className="day-heading">
-                  <span className="dot" style={{ background: UNSCHEDULED_COLOR }}>•</span>
-                  <span className="grow">Not scheduled</span>
-                </h3>
-                {unscheduled.length > 0
-                  ? <ul>{unscheduled.map(placeItem)}</ul>
-                  : <p className="muted small day-empty">Everything here has a day.</p>}
-              </section>
-            )}
-            {activeFilter !== UNSCHEDULED && shownDays.map((day) => {
-              const dayPlaces = shown.filter((p) => p.dayId === day.id);
-              return (
-                <section key={day.id}>
-                  {dayHeading(day)}
-                  {dayPlaces.length > 0
-                    ? <ul>{dayPlaces.map(placeItem)}</ul>
-                    : <p className="muted small day-empty">No places yet.</p>}
-                </section>
-              );
-            })}
-            {trip.cities.length > 0 && cityPlaces.length === 0 && days.length === 0 && (
-              <p className="muted empty">Search above or tap a place on the map to save it.</p>
-            )}
-            {city && (
-              <button
-                className="text-button danger remove-city"
-                onClick={() => {
-                  const count = cityPlaces.length;
-                  const warning = count > 0 ? ` Its ${count} saved place${count === 1 ? '' : 's'} will be deleted.` : '';
-                  if (window.confirm(`Remove ${city.name} from this trip?${warning}`)) {
-                    update((current) => removeCity(current, city.id));
-                    setTab(ALL);
-                  }
-                }}
-              >
-                Remove {city.name} from this trip
-              </button>
-            )}
-          </div>
-        </section>
+      <div className={step === 'days' ? 'workspace days' : 'workspace'}>
+        {step === 'places' ? placesPanel : (
+          <DayBoard
+            trip={trip}
+            places={cityPlaces}
+            days={days}
+            details={details}
+            selectedId={selectedId}
+            focus={activeFocus}
+            unscheduledKey={UNSCHEDULED}
+            canAutoGroup={city !== null && cityPlaces.length > 0}
+            onSelect={setSelectedId}
+            onMove={(id, dayId) => update((current) => updatePlace(current, id, { dayId }))}
+            onFocus={(key) => setFocus(activeFocus === key ? ALL : key)}
+            onAddDay={onAddDay}
+            onEditDay={setEditingDayId}
+            onAutoGroup={() => setAutoGrouping(true)}
+          />
+        )}
 
         <div className="map-pane hud-frame">
           <MapView
@@ -378,26 +409,50 @@ export function TripView({ trip, provider, onChange }: Props) {
             onPinClick={(id) => {
               if (id === 'preview') return;
               setPreview(null);
-              setExpandedId(id);
+              setSelectedId(id);
             }}
             onPoiClick={onPoiClick}
           />
         </div>
       </div>
 
-      {importing && (
-        <ImportDialog
+      {suggesting && suggest && (
+        <SuggestDialog
           trip={trip}
           provider={provider}
-          file={importing}
+          suggest={suggest}
           defaultCityId={previewCityId}
-          onClose={() => setImporting(null)}
-          onSave={(cityId, placeIds) => {
-            update((current) => addPlaces(current, cityId, placeIds));
-            if (city && city.id !== cityId) setTab(cityId);
-            setDayFilter(ALL);
-            setImporting(null);
+          onClose={() => setSuggesting(false)}
+          onResult={(request) => {
+            setSuggesting(false);
+            setReviewing(request);
           }}
+        />
+      )}
+
+      {reviewing && (
+        <ReviewDialog
+          trip={trip}
+          provider={provider}
+          request={reviewing}
+          onClose={() => setReviewing(null)}
+          onSave={(cityId, placeIds, mustHave) => {
+            update((current) => addPlaces(current, cityId, placeIds, mustHave));
+            if (city && city.id !== cityId) setTab(cityId);
+            setReviewing(null);
+          }}
+        />
+      )}
+
+      {autoGrouping && city && (
+        <AutoGroupDialog
+          cityName={city.name}
+          mustHaves={mustHaves.length}
+          maybes={maybes.length}
+          defaultDays={days.length || Math.max(1, Math.ceil((mustHaves.length || cityPlaces.length) / PLACES_PER_DAY))}
+          ready={!cityPlaces.some((p) => details[p.placeId] === undefined)}
+          onApply={applyAutoGroup}
+          onClose={() => setAutoGrouping(false)}
         />
       )}
 

@@ -60,8 +60,19 @@ Deploying the rules is what limits each account to its own trips. Your app is th
 
 Open that address in Chrome on Android, sign in, then choose **Add to Home screen** or **Install app** from the menu.
 
+## 6. Gemini suggestions
+
+These use the free Gemini tier through your Firebase project, with no card. Only the city and your interests are sent, and Google may use them to improve its products.
+
+1. In the Firebase console, open **AI Services > AI Logic**, click **Get started**, and choose the **Gemini Developer API**.
+2. In [Google Cloud reCAPTCHA](https://console.cloud.google.com/security/recaptcha), with your Firebase project selected, enable the API if asked and create a **Web** key. Add the domains `YOUR-FIREBASE-PROJECT.web.app` and `YOUR-FIREBASE-PROJECT.firebaseapp.com`. Leave the checkbox challenge off, and never add `localhost`.
+3. In the Firebase console, open **Security > App Check > Apps**, register your web app with **reCAPTCHA Enterprise**, and paste in the key.
+4. Add the same key to `.env.local` as `VITE_RECAPTCHA_SITE_KEY`, then publish again.
+
+To test locally, run `npm run dev`, open the browser console after clicking **Get ideas**, and add the printed debug token under **App Check > Apps > ⋮ > Manage debug tokens**. Keep that token private.
+
 ## Good to know
 
-- Google's terms allow keeping place IDs but generally not names, addresses, coordinates or photos, so those load fresh each time. Nicknames and notes are your own and stay readable without signal.
+- Google's terms allow keeping place IDs but generally not names, addresses, coordinates or photos, so those load fresh each time. Notes are your own and stay readable without signal.
 - Each trip syncs as one record. If both devices edit the same trip while offline, the one that reconnects last replaces the other's changes to that trip.
 - Trips in demo mode stay in that browser and don't move to your account.

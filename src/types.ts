@@ -21,7 +21,8 @@ export type SavedPlace = {
   placeId: string;
   cityId: string;
   dayId: string | null;
-  nickname: string;
+  /** Missing on places saved before stars existed. */
+  mustHave?: boolean;
   notes: string;
 };
 

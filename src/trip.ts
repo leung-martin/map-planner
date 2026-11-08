@@ -72,12 +72,23 @@ export function removeDay(trip: Trip, dayId: string): Trip {
   };
 }
 
-export function addPlace(trip: Trip, place: Pick<SavedPlace, 'placeId' | 'cityId' | 'dayId'>): Trip {
-  return { ...trip, places: [...trip.places, { ...place, id: newId(), nickname: '', notes: '' }] };
+export function addPlace(trip: Trip, place: Pick<SavedPlace, 'placeId' | 'cityId' | 'dayId' | 'mustHave'>): Trip {
+  return { ...trip, places: [...trip.places, { ...place, id: newId(), notes: '' }] };
 }
 
-export function addPlaces(trip: Trip, cityId: string, placeIds: string[]): Trip {
-  return placeIds.reduce((current, placeId) => addPlace(current, { placeId, cityId, dayId: null }), trip);
+export function addPlaces(trip: Trip, cityId: string, placeIds: string[], mustHave: boolean): Trip {
+  return placeIds.reduce((current, placeId) => addPlace(current, { placeId, cityId, dayId: null, mustHave }), trip);
+}
+
+/** Puts each group of saved places on its own day in a city, adding days if there aren't enough. */
+export function assignGroups(trip: Trip, cityId: string, groups: string[][]): Trip {
+  let result = trip;
+  while (result.days.filter((day) => day.cityIds.includes(cityId)).length < groups.length) {
+    result = addDay(result, cityId);
+  }
+  const days = result.days.filter((day) => day.cityIds.includes(cityId));
+  const dayOf = new Map(groups.flatMap((group, index) => group.map((id) => [id, days[index].id] as const)));
+  return { ...result, places: result.places.map((place) => (dayOf.has(place.id) ? { ...place, dayId: dayOf.get(place.id)! } : place)) };
 }
 
 export function updatePlace(trip: Trip, id: string, patch: Partial<Omit<SavedPlace, 'id'>>): Trip {

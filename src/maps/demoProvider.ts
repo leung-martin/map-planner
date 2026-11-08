@@ -1,3 +1,4 @@
+import type { PlaceIdea } from '../suggest';
 import type { Bounds } from '../types';
 import { DemoMapView } from './DemoMapView';
 import type { MapsProvider, PlaceDetails, Suggestion } from './provider';
@@ -39,12 +40,19 @@ function details([placeId, name, area, city, lat, lng]: Row): PlaceDetails {
         `data:image/svg+xml,${encodeURIComponent(
           `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300"><rect width="640" height="300" fill="#d9d2c3"/><text x="320" y="158" font-family="sans-serif" font-size="26" fill="#5b5346" text-anchor="middle">Photo of ${name}</text></svg>`,
         )}`,
+      width: 640,
+      height: 300,
       credits: [{ name: 'Sample photo', uri: '' }],
     },
   };
 }
 
 const matches = (text: string, query: string) => text.toLowerCase().includes(query.trim().toLowerCase());
+
+export async function demoSuggest(cityName: string): Promise<PlaceIdea[]> {
+  const cityId = Object.keys(CITIES).find((id) => CITIES[id].name === cityName);
+  return DEMO_PLACES.filter((row) => row[3] === cityId).map((row) => ({ name: row[1], why: 'A sample idea for the demo.' }));
+}
 
 export const demoProvider: MapsProvider = {
   demo: true,

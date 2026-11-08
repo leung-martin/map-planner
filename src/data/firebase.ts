@@ -11,7 +11,7 @@ import { firebaseConfig } from '../config';
 import type { Trip } from '../types';
 import type { TripStore } from './store';
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 // The local cache keeps trips readable without signal and queues edits until reconnecting.
 const db = initializeFirestore(app, {
