@@ -250,6 +250,19 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .dialog-row.spread { justify-content: space-between; }
 .dialog-row.spread > .primary { flex: none; }
 
+.import-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.import-dialog[open] { display: flex; flex-direction: column; }
+.import-dialog h2 { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.import-summary { flex: none; margin: 10px 0 8px; }
+.import-list { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line); }
+.import-dialog label.import-row { display: flex; align-items: center; gap: 10px; margin: 0; padding: 7px 10px; border-bottom: 1px solid var(--line); font-weight: 400; cursor: pointer; }
+.import-row.disabled { cursor: default; }
+.import-row.disabled .import-name { color: var(--muted); }
+.import-row input { flex: none; width: 20px; height: 20px; min-height: 0; accent-color: var(--accent-fill); }
+.import-name, .import-detail, .import-note { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-name { font-size: 1.05rem; font-weight: 500; }
+.import-note.warn { color: var(--accent); font-weight: 500; }
+
 /* Pins are shared by the Google map and the demo map. */
 .pin { width: 30px; height: 30px; padding: 0; margin-bottom: 6px; display: grid; place-items: center; border-radius: 50% 50% 50% 0; border: 2px solid #fff; background: var(--pin-color); transform: rotate(-45deg); box-shadow: 0 2px 5px rgb(0 0 0 / 40%); cursor: pointer; min-height: 0; }
 .pin span { transform: rotate(45deg); color: #fff; font-size: 13px; font-weight: 600; }

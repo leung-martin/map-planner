@@ -76,6 +76,10 @@ export function addPlace(trip: Trip, place: Pick<SavedPlace, 'placeId' | 'cityId
   return { ...trip, places: [...trip.places, { ...place, id: newId(), nickname: '', notes: '' }] };
 }
 
+export function addPlaces(trip: Trip, cityId: string, placeIds: string[]): Trip {
+  return placeIds.reduce((current, placeId) => addPlace(current, { placeId, cityId, dayId: null }), trip);
+}
+
 export function updatePlace(trip: Trip, id: string, patch: Partial<Omit<SavedPlace, 'id'>>): Trip {
   return { ...trip, places: trip.places.map((place) => (place.id === id ? { ...place, ...patch } : place)) };
 }
@@ -124,8 +128,10 @@ export function shortLocation(parts: AddressPart[]): string {
     }
     return null;
   };
-  const area = find('neighborhood', 'sublocality_level_1', 'sublocality');
+  // Numbered levels only: Japanese addresses also list blocks ("3") and "1-chōme" as sublocalities.
+  const named = find('neighborhood', 'sublocality_level_1', 'sublocality_level_2');
+  const area = named && !/^\d+(-ch[oō]me)?$/i.test(named) ? named : null;
   const city = find('locality', 'postal_town', 'administrative_area_level_2', 'administrative_area_level_1');
-  const named = [area, city].filter((text): text is string => Boolean(text) );
-  return named.length > 0 ? [...new Set(named)].join(', ') : (find('country') ?? '');
+  const shown = [area, city].filter((text): text is string => Boolean(text));
+  return shown.length > 0 ? [...new Set(shown)].join(', ') : (find('country') ?? '');
 }

@@ -110,6 +110,19 @@ export function createGoogleProvider(): MapsProvider {
     searchCities: (input) => suggest({ input, includedPrimaryTypes: ['(cities)'] }),
     searchPlaces: (input, near) => suggest({ input, ...(near ? { locationBias: near } : {}) }),
 
+    // Requesting only the ID keeps this on Google's free, unlimited tier.
+    matchPlace: (textQuery, near) =>
+      limit(async () => {
+        const { Place } = await placesLibrary();
+        const { places } = await Place.searchByText({
+          textQuery,
+          fields: ['id'],
+          maxResultCount: 1,
+          locationBias: { center: near, radius: 500 },
+        });
+        return places[0]?.id ?? null;
+      }),
+
     getPlace(placeId) {
       let pending = details.get(placeId);
       if (!pending) {

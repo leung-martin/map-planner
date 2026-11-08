@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MapPin, MapsProvider, PlaceDetails, Suggestion } from '../maps/provider';
 import {
-  addCity, addDay, addPlace, dayColor, dayNumber, dayRoute, removeCity, removePlace, updatePlace,
+  addCity, addDay, addPlace, addPlaces, dayColor, dayNumber, dayRoute, removeCity, removePlace, updatePlace,
   UNSCHEDULED_COLOR,
 } from '../trip';
 import type { Bounds, Day, SavedPlace, Trip } from '../types';
+import { KmlError, parseKml, type ParsedKml } from '../importKml';
 import { useTheme } from '../theme';
 import { DayDialog } from './DayDialog';
 import { ThemeToggle } from './Hud';
+import { ImportDialog } from './ImportDialog';
 import { LazyField } from './LazyField';
 import { PlaceItem } from './PlaceItem';
 import { PreviewCard } from './PreviewCard';
@@ -67,6 +69,8 @@ export function TripView({ trip, provider, onChange }: Props) {
   const [lookupError, setLookupError] = useState('');
   const [cityBounds, setCityBounds] = useState<Bounds | null>(null);
   const { resolved: theme } = useTheme();
+  const [importing, setImporting] = useState<ParsedKml | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const latest = useRef(trip);
   latest.current = trip;
@@ -163,6 +167,15 @@ export function TripView({ trip, provider, onChange }: Props) {
   const onPoiClick = (placeId: string) => {
     if (latest.current.cities.length === 0) return;
     provider.getPlace(placeId).then((result) => showPreview({ details: result, fromSearch: false })).catch(lookupFailed);
+  };
+
+  const onImportFile = async (file: File) => {
+    setLookupError('');
+    try {
+      setImporting(parseKml(await file.text()));
+    } catch (reason) {
+      setLookupError(reason instanceof KmlError ? reason.message : 'That file couldn’t be opened.');
+    }
   };
 
   const onAddDay = () => {
@@ -293,6 +306,21 @@ export function TripView({ trip, provider, onChange }: Props) {
                   Not scheduled
                 </button>
                 <button className="chip add" onClick={onAddDay}>+ Day</button>
+                <button className="chip add" title="Import a KML file exported from Google My Maps" onClick={() => fileInput.current?.click()}>
+                  Import
+                </button>
+                {/* No accept filter: Android's file picker greys out .kml files when one is set. */}
+                <input
+                  ref={fileInput}
+                  type="file"
+                  hidden
+                  aria-label="KML file to import"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void onImportFile(file);
+                  }}
+                />
               </div>
             )}
           </div>
@@ -356,6 +384,22 @@ export function TripView({ trip, provider, onChange }: Props) {
           />
         </div>
       </div>
+
+      {importing && (
+        <ImportDialog
+          trip={trip}
+          provider={provider}
+          file={importing}
+          defaultCityId={previewCityId}
+          onClose={() => setImporting(null)}
+          onSave={(cityId, placeIds) => {
+            update((current) => addPlaces(current, cityId, placeIds));
+            if (city && city.id !== cityId) setTab(cityId);
+            setDayFilter(ALL);
+            setImporting(null);
+          }}
+        />
+      )}
 
       {editingDay && (
         <DayDialog trip={trip} day={editingDay} onUpdate={update} onClose={() => setEditingDayId(null)} />

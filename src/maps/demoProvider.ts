@@ -74,6 +74,10 @@ export const demoProvider: MapsProvider = {
     }));
   },
 
+  async matchPlace(name) {
+    return DEMO_PLACES.find((row) => matches(row[1], name) || matches(name, row[1]))?.[0] ?? null;
+  },
+
   async getPlace(placeId) {
     const row = DEMO_PLACES.find(([id]) => id === placeId);
     if (!row) throw new Error('Unknown demo place');

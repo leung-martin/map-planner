@@ -47,6 +47,8 @@ export interface MapsProvider {
   readonly MapView: ComponentType<MapViewProps>;
   searchCities(query: string): Promise<Suggestion[]>;
   searchPlaces(query: string, near: Bounds | null): Promise<Suggestion[]>;
+  /** Finds the place ID for a named pin. */
+  matchPlace(name: string, near: LatLng): Promise<string | null>;
   getPlace(placeId: string): Promise<PlaceDetails>;
   getCityBounds(placeId: string): Promise<Bounds | null>;
 }

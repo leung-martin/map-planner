@@ -98,7 +98,16 @@ describe('shortLocation', () => {
     expect(shortLocation([part('Italy', 'country')])).toBe('Italy');
   });
   it('does not repeat a name', () => {
-    expect(shortLocation([part('Paris', 'sublocality'), part('Paris', 'locality')])).toBe('Paris');
+    expect(shortLocation([part('Paris', 'sublocality_level_1'), part('Paris', 'locality')])).toBe('Paris');
+  });
+  it('uses the area name in Japanese addresses, not the block or chōme', () => {
+    expect(shortLocation([
+      part('1', 'premise'), part('3', 'sublocality_level_4', 'sublocality'), part('1-chōme', 'sublocality_level_3', 'sublocality'),
+      part('Azabudai', 'sublocality_level_2', 'sublocality'), part('Minato City', 'locality'), part('Tokyo', 'administrative_area_level_1'),
+    ])).toBe('Azabudai, Minato City');
+  });
+  it('ignores a neighborhood that is only a number', () => {
+    expect(shortLocation([part('3', 'neighborhood'), part('Minato City', 'locality')])).toBe('Minato City');
   });
 });
 
