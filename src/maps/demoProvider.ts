@@ -43,7 +43,6 @@ function details([placeId, name, area, city, lat, lng]: Row): PlaceDetails {
         )}`,
       width: 640,
       height: 300,
-      credits: [{ name: 'Sample photo', uri: '' }],
     },
   };
 }

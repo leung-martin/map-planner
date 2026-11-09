@@ -1,7 +1,9 @@
+import { Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import type { PlaceDetails, PlacePhoto } from '../maps/provider';
 import { dayColor, dayNumber, googleMapsUrl } from '../trip';
 import type { SavedPlace, Trip } from '../types';
+import { MapsLink } from './Hud';
 import { LazyField } from './LazyField';
 import { ScoreMeters, ScoreStrip } from './Scores';
 
@@ -19,18 +21,7 @@ type Props = {
 function Photo({ photo, name }: { photo: PlacePhoto; name: string }) {
   const src = useMemo(() => photo.url(640), [photo]);
   return (
-    <figure className="photo">
-      <img src={src} alt={name} width={photo.width} height={photo.height} />
-      <figcaption className="muted small">
-        Photo:{' '}
-        {photo.credits.map((credit, index) => (
-          <span key={credit.name + index}>
-            {index > 0 && ', '}
-            {credit.uri ? <a href={credit.uri} target="_blank" rel="noreferrer">{credit.name}</a> : credit.name}
-          </span>
-        ))}
-      </figcaption>
-    </figure>
+    <img className="photo" src={src} alt={name} width={photo.width} height={photo.height} />
   );
 }
 
@@ -68,9 +59,7 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
             {dayNumber(trip, day.id)}
           </span>
         )}
-        <a className="maps-link" href={googleMapsUrl(place.placeId, loaded?.name ?? 'place')} target="_blank" rel="noreferrer">
-          Maps ↗
-        </a>
+        <MapsLink href={googleMapsUrl(place.placeId, loaded?.name ?? 'place')} name={name} />
       </div>
 
       {!expanded && place.scores && <ScoreStrip scores={place.scores} />}
@@ -84,7 +73,9 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
             Note
             <LazyField label="Note" multiline value={place.notes} onCommit={(notes) => onChange({ notes })} />
           </label>
-          <button className="text-button danger" onClick={onRemove}>Remove from trip</button>
+          <button className="icon-button danger remove-place" title="Remove from trip" aria-label={`Remove ${name} from trip`} onClick={onRemove}>
+            <Trash2 size={20} aria-hidden="true" />
+          </button>
         </div>
       )}
     </li>

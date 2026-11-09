@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { PlaceDetails } from '../maps/provider';
 import { googleMapsUrl } from '../trip';
 import type { SavedPlace, Trip } from '../types';
+import { MapsLink } from './Hud';
 
 type Props = {
   trip: Trip;
@@ -23,9 +24,7 @@ export function PreviewCard({ trip, details, existing, defaultCityId, onSave, on
           <strong>{details.name}</strong>
           <div className="muted small">{details.shortLocation}</div>
         </div>
-        <a className="maps-link" href={googleMapsUrl(details.placeId, details.name)} target="_blank" rel="noreferrer">
-          Maps ↗
-        </a>
+        <MapsLink href={googleMapsUrl(details.placeId, details.name)} name={details.name} />
       </div>
       {existing ? (
         <div className="preview-actions">

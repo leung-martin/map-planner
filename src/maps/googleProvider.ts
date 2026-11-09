@@ -48,7 +48,6 @@ function toDetails(place: google.maps.places.Place): PlaceDetails {
           url: (maxWidth) => photo.getURI({ maxWidth }),
           width: photo.widthPx,
           height: photo.heightPx,
-          credits: photo.authorAttributions.map((a) => ({ name: a.displayName, uri: a.uri ?? '' })),
         }
       : null,
   };

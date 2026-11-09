@@ -5,7 +5,6 @@ export type PlacePhoto = {
   url(maxWidth: number): string;
   width: number;
   height: number;
-  credits: { name: string; uri: string }[];
 };
 
 export type PlaceDetails = {

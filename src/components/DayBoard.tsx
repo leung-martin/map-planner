@@ -1,7 +1,9 @@
+import { LayoutGrid, Pencil, Plus } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 import type { PlaceDetails } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
+import { MapsLink } from './Hud';
 import { ScoreStrip } from './Scores';
 
 type Props = {
@@ -96,9 +98,10 @@ export function DayBoard({
   return (
     <section className="board-panel">
       <div className="board-tools">
+        <h2 className="bar-title">Days</h2>
         <p className="muted small grow">Drag places onto days, or tap one and choose a day.</p>
-        {canAutoGroup && <button className="chip add" onClick={onAutoGroup}>Auto-group</button>}
-        <button className="chip add" onClick={onAddDay}>+ Day</button>
+        {canAutoGroup && <button className="chip add" onClick={onAutoGroup}><LayoutGrid size={17} aria-hidden="true" /> Auto-group</button>}
+        <button className="chip add" onClick={onAddDay}><Plus size={17} aria-hidden="true" /> Day</button>
       </div>
 
       <div className="board">
@@ -125,27 +128,22 @@ export function DayBoard({
                     {day.date && <span className="muted small"> · {formatDate(day.date)}</span>}
                   </span>
                 </button>
-                <button className="text-button" aria-label={`Edit day ${number}`} onClick={() => onEditDay(day.id)}>Edit</button>
+                <button className="text-button" title="Edit day" aria-label={`Edit day ${number}`} onClick={() => onEditDay(day.id)}>
+                  <Pencil size={17} aria-hidden="true" />
+                </button>
               </h3>
               <ul className="column-list">{dayPlaces.map(card)}</ul>
             </div>
           );
         })}
 
-        <button className="column-add" onClick={onAddDay}>+ Add a day</button>
+        <button className="column-add" onClick={onAddDay}><Plus size={18} aria-hidden="true" /> Add a day</button>
       </div>
 
       {selected && (
         <div className="move-bar">
           <span className="move-name clip">{nameOf(selected)}</span>
-          <a
-            className="maps-link"
-            href={googleMapsUrl(selected.placeId, nameOf(selected))}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Maps ↗
-          </a>
+          <MapsLink href={googleMapsUrl(selected.placeId, nameOf(selected))} name={nameOf(selected)} />
           <div className="chips" role="group" aria-label="Move to day">
             <button className={selected.dayId === null ? 'chip active' : 'chip'} onClick={() => onMove(selected.id, null)}>To place</button>
             {days.filter((day) => accepts(selected, day)).map((day) => (

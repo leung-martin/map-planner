@@ -1,3 +1,5 @@
+import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, Upload } from 'lucide-react';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { groupByLocation } from '../autoGroup';
 import { KmlError, parseKml } from '../importKml';
@@ -13,7 +15,7 @@ import type { Bounds, SavedPlace, Trip } from '../types';
 import { AutoGroupDialog } from './AutoGroupDialog';
 import { DayBoard } from './DayBoard';
 import { DayDialog } from './DayDialog';
-import { ThemeToggle } from './Hud';
+import { SettingsMenu, ThemeToggle } from './Hud';
 import { LazyField } from './LazyField';
 import { PlaceItem } from './PlaceItem';
 import { PreviewCard } from './PreviewCard';
@@ -260,60 +262,44 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   const placesPanel = (
     <section className="panel">
       <div className="tools">
+        <div className="tools-head">
+          <h2 className="bar-title">Locations</h2>
+          {hasCities && (
+            <SettingsMenu>
+              {(close) => (
+                <button
+                  role="menuitem"
+                  title="Import a KML file exported from Google My Maps"
+                  onClick={() => {
+                    close();
+                    fileInput.current?.click();
+                  }}
+                >
+                  <Upload size={18} aria-hidden="true" /> Import from My Maps
+                </button>
+              )}
+            </SettingsMenu>
+          )}
+          {/* No accept filter: Android's file picker greys out .kml files when one is set. */}
+          <input
+            ref={fileInput}
+            type="file"
+            hidden
+            aria-label="KML file to import"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void onImportFile(file);
+            }}
+          />
+        </div>
         {addingCity && (
           <div className="add-city">
             {!hasCities && <p className="muted small">Which city are you visiting first?</p>}
             <SearchBox placeholder="Add a city" autoFocus search={provider.searchCities} onPick={pickCity} />
           </div>
         )}
-        {hasCities && (
-          <SearchBox
-            placeholder={city ? `Find a place in ${city.name}` : 'Find a place'}
-            search={(query) => provider.searchPlaces(query, cityBounds)}
-            onPick={pickSuggestion}
-          />
-        )}
         {lookupError && <p className="error-text small">{lookupError}</p>}
-        {preview && (
-          <PreviewCard
-            key={preview.details.placeId}
-            trip={trip}
-            details={preview.details}
-            existing={trip.places.find((p) => p.placeId === preview.details.placeId)}
-            defaultCityId={previewCityId}
-            onCancel={() => setPreview(null)}
-            onShowExisting={(place) => {
-              setPreview(null);
-              if (city && city.id !== place.cityId) setTab(place.cityId);
-              setSelectedId(place.id);
-            }}
-            onSave={(cityId, mustHave) => {
-              update((current) => addPlace(current, { placeId: preview.details.placeId, cityId, dayId: null, mustHave }));
-              if (city && city.id !== cityId) setTab(cityId);
-              setPreview(null);
-            }}
-          />
-        )}
-        {hasCities && (
-          <div className="chips">
-            {suggest && <button className="chip add" onClick={() => setSuggesting(true)}>Suggest places</button>}
-            <button className="chip add" title="Import a KML file exported from Google My Maps" onClick={() => fileInput.current?.click()}>
-              Import from My Maps
-            </button>
-            {/* No accept filter: Android's file picker greys out .kml files when one is set. */}
-            <input
-              ref={fileInput}
-              type="file"
-              hidden
-              aria-label="KML file to import"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                if (file) void onImportFile(file);
-              }}
-            />
-          </div>
-        )}
       </div>
 
       <div className="list">
@@ -331,7 +317,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
           </section>
         )}
         {hasCities && cityPlaces.length === 0 && (
-          <p className="muted empty">Search above, tap a place on the map, or get some suggestions.</p>
+          <p className="muted empty">Search on the map, tap a place, or get some suggestions.</p>
         )}
         {city && (
           <button
@@ -352,7 +338,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
 
       {cityPlaces.length > 0 && (
         <div className="next-step">
-          <button className="primary" onClick={() => goToStep('days')}>Next: plan your days →</button>
+          <button className="primary" onClick={() => goToStep('days')}>Next: plan your days <ArrowRight size={20} aria-hidden="true" /></button>
         </div>
       )}
     </section>
@@ -361,35 +347,40 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   return (
     <div className="trip">
       <header className="trip-header">
-        <a className="back" href="#/" aria-label="Back to trips">←</a>
+        <a className="back" href="#/" aria-label="Back to trips" title="Back to trips"><ArrowLeft size={24} aria-hidden="true" /></a>
         <LazyField
           className="trip-name"
           label="Trip name"
           value={trip.name}
           onCommit={(name) => name.trim() && update((current) => ({ ...current, name: name.trim() }))}
         />
-        <div className="steps" role="group" aria-label="Planning steps">
-          <button className={step === 'places' ? 'step active' : 'step'} aria-pressed={step === 'places'} onClick={() => goToStep('places')}>
-            <b>1</b> Choose places
-          </button>
-          <button className={step === 'days' ? 'step active' : 'step'} aria-pressed={step === 'days'} onClick={() => goToStep('days')}>
-            <b>2</b> Plan days
-          </button>
-        </div>
         <ThemeToggle />
       </header>
 
-      <nav className="city-tabs" aria-label="Cities">
-        {trip.cities.length > 1 && (
-          <button className={activeTab === ALL ? 'tab active' : 'tab'} onClick={() => setTab(ALL)}>Whole trip</button>
-        )}
-        {trip.cities.map((c) => (
-          <button key={c.id} className={activeTab === c.id ? 'tab active' : 'tab'} onClick={() => setTab(c.id)}>
-            {c.name}
+      <div className="trip-nav">
+        <h2 className="bar-title">Cities</h2>
+        <nav className="city-tabs" aria-label="Cities">
+          {trip.cities.length > 1 && (
+            <button className={activeTab === ALL ? 'tab active' : 'tab'} onClick={() => setTab(ALL)}>
+              <Globe size={18} aria-hidden="true" /> Whole trip
+            </button>
+          )}
+          {trip.cities.map((c) => (
+            <button key={c.id} className={activeTab === c.id ? 'tab active' : 'tab'} onClick={() => setTab(c.id)}>
+              {c.name}
+            </button>
+          ))}
+          <button className="tab add" onClick={() => setAddingCity((open) => !open)}><Plus size={18} aria-hidden="true" /> City</button>
+        </nav>
+        <div className="steps" role="group" aria-label="Planning steps">
+          <button className={step === 'places' ? 'step active' : 'step'} aria-pressed={step === 'places'} onClick={() => goToStep('places')}>
+            <ListChecks size={18} aria-hidden="true" /> <b>1</b> Choose places
           </button>
-        ))}
-        <button className="tab add" onClick={() => setAddingCity((open) => !open)}>+ City</button>
-      </nav>
+          <button className={step === 'days' ? 'step active' : 'step'} aria-pressed={step === 'days'} onClick={() => goToStep('days')}>
+            <CalendarDays size={18} aria-hidden="true" /> <b>2</b> Plan days
+          </button>
+        </div>
+      </div>
 
       <div className={step === 'days' ? 'workspace days' : 'workspace'}>
         {step === 'places' ? placesPanel : (
@@ -424,6 +415,42 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             }}
             onPoiClick={onPoiClick}
           />
+          {step === 'places' && hasCities && (
+            <div className="map-overlay">
+              <div className="map-search">
+                <SearchBox
+                  placeholder={city ? `Find a place in ${city.name}` : 'Find a place'}
+                  search={(query) => provider.searchPlaces(query, cityBounds)}
+                  onPick={pickSuggestion}
+                />
+                {suggest && (
+                  <button className="primary map-suggest" title="Suggest places" aria-label="Suggest places" onClick={() => setSuggesting(true)}>
+                    <Sparkles size={18} aria-hidden="true" /> <span>Suggest places</span>
+                  </button>
+                )}
+              </div>
+              {preview && (
+                <PreviewCard
+                  key={preview.details.placeId}
+                  trip={trip}
+                  details={preview.details}
+                  existing={trip.places.find((p) => p.placeId === preview.details.placeId)}
+                  defaultCityId={previewCityId}
+                  onCancel={() => setPreview(null)}
+                  onShowExisting={(place) => {
+                    setPreview(null);
+                    if (city && city.id !== place.cityId) setTab(place.cityId);
+                    setSelectedId(place.id);
+                  }}
+                  onSave={(cityId, mustHave) => {
+                    update((current) => addPlace(current, { placeId: preview.details.placeId, cityId, dayId: null, mustHave }));
+                    if (city && city.id !== cityId) setTab(cityId);
+                    setPreview(null);
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
 

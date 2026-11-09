@@ -1,3 +1,4 @@
+import { Check, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { MapsProvider, Suggestion } from '../maps/provider';
 import { addCity, createTrip, tripNameFor } from '../trip';
@@ -66,12 +67,12 @@ export function NewTrip({ provider, onCreate, onCancel }: Props) {
                     aria-label={`Remove ${stop.main}`}
                     onClick={() => setStops((current) => current.filter((s) => s.placeId !== stop.placeId))}
                   >
-                    ×
+                    <X size={20} aria-hidden="true" />
                   </button>
                 </li>
               ))}
             </ol>
-            <button className="primary wizard-done" onClick={finish}>That’s everything</button>
+            <button className="primary wizard-done" onClick={finish}><Check size={20} aria-hidden="true" /> That’s everything</button>
           </>
         )}
       </section>

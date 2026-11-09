@@ -1,3 +1,4 @@
+import { CalendarDays, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { cycleTheme } from '../theme';
 import type { Trip } from '../types';
@@ -51,7 +52,7 @@ export function TripsHome({ trips, missingTrip, demo, synced, onDelete, onSignOu
         <ul className="tile-grid">
           <li className="tile tile-primary">
             <a href="#/new">
-              <h2 className="tile-bar">New Trip</h2>
+              <h2 className="tile-bar"><Plus size={22} aria-hidden="true" /> New Trip</h2>
               <div className="tile-body tile-prompt">Where are you going?</div>
             </a>
           </li>
@@ -62,6 +63,7 @@ export function TripsHome({ trips, missingTrip, demo, synced, onDelete, onSignOu
                 <div className="tile-body">
                   <span className="tile-cities">{trip.cities.map((city) => city.name).join(' · ') || 'No cities yet'}</span>
                   <span className="tile-stats">
+                    <CalendarDays size={18} className="muted" aria-hidden="true" />
                     <span className="stat"><b>{trip.days.length}</b> {trip.days.length === 1 ? 'Day' : 'Days'}</span>
                     <span className="stat"><b>{trip.places.length}</b> {trip.places.length === 1 ? 'Place' : 'Places'}</span>
                   </span>
@@ -70,11 +72,12 @@ export function TripsHome({ trips, missingTrip, demo, synced, onDelete, onSignOu
               <button
                 className="tile-delete"
                 aria-label={`Delete ${trip.name}`}
+                title="Delete trip"
                 onClick={() => {
                   if (window.confirm(`Delete “${trip.name}”? This can’t be undone.`)) onDelete(trip.id);
                 }}
               >
-                Delete
+                <Trash2 size={18} aria-hidden="true" />
               </button>
             </li>
           ))}

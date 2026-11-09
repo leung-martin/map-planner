@@ -1,3 +1,4 @@
+import { ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { dayNumber, moveDay, removeDay, updateDay } from '../trip';
 import type { Day, Trip } from '../types';
@@ -49,8 +50,8 @@ export function DayDialog({ trip, day, onUpdate, onClose }: Props) {
         />
       </label>
       <div className="dialog-row">
-        <button disabled={number === 1} onClick={() => onUpdate((t) => moveDay(t, day.id, -1))}>← Earlier</button>
-        <button disabled={number === trip.days.length} onClick={() => onUpdate((t) => moveDay(t, day.id, 1))}>Later →</button>
+        <button disabled={number === 1} onClick={() => onUpdate((t) => moveDay(t, day.id, -1))}><ArrowLeft size={18} aria-hidden="true" /> Earlier</button>
+        <button disabled={number === trip.days.length} onClick={() => onUpdate((t) => moveDay(t, day.id, 1))}>Later <ArrowRight size={18} aria-hidden="true" /></button>
       </div>
       <div className="dialog-row spread">
         <button
@@ -62,7 +63,7 @@ export function DayDialog({ trip, day, onUpdate, onClose }: Props) {
             }
           }}
         >
-          Delete day
+          <Trash2 size={17} aria-hidden="true" /> Delete day
         </button>
         <button className="primary" onClick={() => dialog.current?.close()}>Done</button>
       </div>
