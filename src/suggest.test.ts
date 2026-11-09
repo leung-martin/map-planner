@@ -45,6 +45,14 @@ describe('withFallback', () => {
     await expect(withFallback(fail('[503 ] Service Unavailable'), lighter)).resolves.toBe('lighter');
     await expect(withFallback(fail('[429] RESOURCE_EXHAUSTED'), lighter)).resolves.toBe('lighter');
   });
+  it('switches when the main model takes too long', async () => {
+    const hanging = () => new Promise<string>(() => {});
+    await expect(withFallback(hanging, lighter, 10)).resolves.toBe('lighter');
+  });
+  it('waits for a main model that answers within the limit', async () => {
+    const slowButFine = () => new Promise<string>((resolve) => setTimeout(() => resolve('main'), 5));
+    await expect(withFallback(slowButFine, lighter, 200)).resolves.toBe('main');
+  });
   it('does not retry setup problems, since the other model would fail too', async () => {
     await expect(withFallback(fail('[401 ] Firebase App Check token is invalid.'), lighter)).rejects.toThrow(/App Check/);
   });

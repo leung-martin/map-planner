@@ -38,16 +38,27 @@ export function parseIdeas(text: string): PlaceIdea[] {
 }
 
 const LIMIT_ERROR = /429|quota|resource.?exhausted|rate.?limit/i;
-const OVERLOAD_ERROR = /\b50[03]\b|high demand|overloaded|unavailable/i;
+const OVERLOAD_ERROR = /\b50[03]\b|high demand|overloaded|unavailable|timed out/i;
+const PRIMARY_LIMIT_MS = 15_000;
 
-/** Tries the second call only when the first model is overloaded or out of quota. */
-export async function withFallback<T>(primary: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
+/** Tries the second call only when the first model is overloaded, out of quota, or too slow. */
+export async function withFallback<T>(
+  primary: () => Promise<T>,
+  fallback: () => Promise<T>,
+  limitMs = PRIMARY_LIMIT_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Main model timed out')), limitMs);
+  });
   try {
-    return await primary();
+    return await Promise.race([primary(), limit]);
   } catch (reason) {
     const text = reason instanceof Error ? reason.message : String(reason);
     if (!LIMIT_ERROR.test(text) && !OVERLOAD_ERROR.test(text)) throw reason;
     return fallback();
+  } finally {
+    clearTimeout(timer);
   }
 }
 
