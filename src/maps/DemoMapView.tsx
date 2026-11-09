@@ -43,6 +43,7 @@ export function DemoMapView({ pins, fitKey, fallback, onPinClick, onPoiClick }: 
       {pins.map((pin) => (
         <button
           key={pin.id}
+          data-pin-id={pin.id}
           className={pin.selected ? 'pin pin-selected demo-pin' : 'pin demo-pin'}
           style={{ ...position(pin.location), '--pin-color': pin.color } as React.CSSProperties}
           title={pin.title}

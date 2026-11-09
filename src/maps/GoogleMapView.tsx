@@ -88,7 +88,9 @@ export function GoogleMapView({ pins, fitKey, fallback, onPinClick, onPoiClick }
     }
   }, [libraries, fitKey]);
 
-  const selected = pins.find((pin) => pin.selected);
+  // Only a single selection moves the map; a boxed group is already in view.
+  const highlighted = pins.filter((pin) => pin.selected);
+  const selected = highlighted.length === 1 ? highlighted[0] : undefined;
   useEffect(() => {
     if (selected) map.current?.panTo(selected.location);
   }, [selected?.id, selected?.placeId]);

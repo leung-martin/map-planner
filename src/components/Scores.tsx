@@ -12,7 +12,6 @@ export function ScoreStack({ scores, labels }: { scores: PlaceScores; labels?: b
           <span className="score-bars" aria-hidden="true">
             {[1, 2, 3, 4, 5].map((step) => <span key={step} className={step <= scores[key] ? 'pip on' : 'pip'} />)}
           </span>
-          <span className="score-value" aria-hidden="true">{scores[key]}/5</span>
         </span>
       ))}
     </span>
@@ -24,7 +23,6 @@ export function ScoreTotal({ scores }: { scores: PlaceScores }) {
   return (
     <span className="score-total" title={`Total: ${total} of ${MAX_TOTAL}`} aria-label={`Total score: ${total} of ${MAX_TOTAL}`}>
       <b aria-hidden="true">{total}</b>
-      <span aria-hidden="true">/{MAX_TOTAL}</span>
     </span>
   );
 }

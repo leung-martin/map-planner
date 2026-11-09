@@ -224,7 +224,6 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .column-add { flex: 0 0 120px; border: 1px dashed var(--accent); background: none; color: var(--accent); }
 .card { display: flex; align-items: flex-start; gap: 6px; width: 100%; min-height: 0; padding: 6px 8px; margin-bottom: 5px; background: var(--bar); text-align: left; cursor: grab; }
 .card-text { flex: 1; min-width: 0; display: block; }
-.card .score-value { display: none; }
 .card .score-total { flex-direction: row; align-items: baseline; gap: 1px; min-width: 0; margin-top: 4px; padding: 1px 6px; }
 .card .score-total b { font-size: 0.95rem; }
 .card.selected { border-color: var(--accent-rule); outline: 1px solid var(--accent-rule); }
@@ -241,6 +240,15 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 /* The empty parts of the overlay let taps through to the map. */
 .map-overlay { position: absolute; z-index: 6; top: 10px; left: 10px; right: 10px; max-width: 560px; display: grid; gap: 6px; pointer-events: none; }
 .map-overlay > * { pointer-events: auto; box-shadow: 0 4px 14px rgb(0 0 0 / 35%); }
+.map-draw { justify-self: start; }
+.box-bar { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 6px 4px 12px; background: var(--solid); border: 1px solid var(--accent-rule); }
+.box-bar strong { flex: none; }
+/* The hint can sit over pins on a small map, so a box may be drawn right through it. */
+.map-overlay > .box-bar.drawing { pointer-events: none; }
+.box-bar.drawing .icon-button { pointer-events: auto; }
+.box-bar .chips { flex: 1; min-width: 0; }
+.box-layer { position: absolute; inset: 0; z-index: 5; cursor: crosshair; touch-action: none; }
+.box-drawn { position: absolute; border: 2px dashed var(--accent-rule); background: rgb(242 138 30 / 18%); pointer-events: none; }
 .map-search { display: flex; gap: 6px; }
 .map-search .search { flex: 1; min-width: 0; }
 .map-search input { background: var(--solid); }
@@ -305,7 +313,6 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .score-row { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; line-height: 1; white-space: nowrap; }
 .score-icon { flex: none; width: 15px; font-size: 0.78rem; text-align: center; }
 .score-bars { flex: none; display: flex; gap: 2px; width: 44px; }
-.score-value { flex: none; width: 20px; color: var(--muted); text-align: right; }
 .pip { flex: 1; height: 7px; background: var(--line); }
 .pip.on { background: var(--accent-rule); }
 .score-stack.labelled { gap: 7px; }
@@ -313,7 +320,6 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .score-stack.labelled .score-icon { font-size: 1rem; width: 20px; }
 .score-stack.labelled .score-label { flex: 1; }
 .score-stack.labelled .score-bars { width: 110px; }
-.score-stack.labelled .score-value { width: 28px; }
 .score-total { flex: none; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 44px; align-self: stretch; padding: 3px 4px; background: var(--bar); border: 1px solid var(--line); font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .score-total b { font-size: 1.3rem; color: var(--ink); }
 .next-step { flex: none; padding: 8px 10px; border-top: 1px solid var(--line); }
@@ -385,7 +391,6 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
   .trip { padding: 4px; gap: 4px; }
   .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: 30dvh minmax(0, 1fr); gap: 4px; }
   .workspace.days { grid-template-columns: minmax(0, 1fr); grid-template-rows: 22dvh minmax(0, 1fr); }
-  .place-row .score-value { display: none; }
   .map-overlay { top: 6px; left: 6px; right: 6px; }
   .map-suggest { width: 46px; padding: 0; }
   .map-suggest span { display: none; }

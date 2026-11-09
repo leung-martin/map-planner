@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, SquareDashedMousePointer, Upload, X } from 'lucide-react';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { groupByLocation } from '../autoGroup';
@@ -9,10 +9,11 @@ import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
 import { useScoring } from '../useScoring';
 import {
-  addCity, addDay, addPlace, addPlaces, assignGroups, dayColor, dayNumber, MAYBE_COLOR, removeCity, removePlace, updatePlace,
+  addCity, addDay, addPlace, addPlaces, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, removeCity, removePlace, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { AutoGroupDialog } from './AutoGroupDialog';
+import { BoxSelectLayer } from './BoxSelectLayer';
 import { DayBoard } from './DayBoard';
 import { DayDialog } from './DayDialog';
 import { SettingsMenu, ThemeToggle } from './Hud';
@@ -83,6 +84,9 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   const [reviewing, setReviewing] = useState<ReviewRequest | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   const [autoGrouping, setAutoGrouping] = useState(false);
+  const [drawingBox, setDrawingBox] = useState(false);
+  const [boxEmpty, setBoxEmpty] = useState(false);
+  const [boxIds, setBoxIds] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const latest = useRef(trip);
@@ -133,7 +137,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
     for (const place of shown) {
       const info = details[place.placeId];
       if (!info || info === 'error') continue;
-      const day = step === 'days' ? trip.days.find((d) => d.id === place.dayId) : undefined;
+      const day = trip.days.find((d) => d.id === place.dayId);
       result.push({
         id: place.id,
         placeId: place.placeId,
@@ -141,7 +145,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
         color: day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : MAYBE_COLOR,
         label: day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
         title: info.name,
-        selected: place.id === selectedId && !preview,
+        selected: (place.id === selectedId && !preview) || boxIds.includes(place.id),
       });
     }
     if (preview) {
@@ -156,11 +160,12 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
       });
     }
     return result;
-  }, [shown, details, trip, selectedId, preview, step]);
+  }, [shown, details, trip, selectedId, preview, boxIds]);
 
   const pending = shown.some((p) => details[p.placeId] === undefined);
   const fitKey = [
-    activeTab, activeFocus, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
+    // The map is narrower in Plan days, so each step needs its own framing.
+    step, activeTab, activeFocus, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
     preview?.fromSearch ? preview.details.placeId : '',
   ].join('|');
 
@@ -169,6 +174,13 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
     setSelectedId(null);
     setPreview(null);
     setFocus(ALL);
+    clearBox();
+  };
+
+  const clearBox = () => {
+    setDrawingBox(false);
+    setBoxEmpty(false);
+    setBoxIds([]);
   };
 
   const showPreview = (next: Preview) => {
@@ -236,6 +248,17 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   };
 
   const editingDay = trip.days.find((d) => d.id === editingDayId);
+
+  const boxPlaces = cityPlaces.filter((p) => boxIds.includes(p.id));
+  const boxCities = [...new Set(boxPlaces.map((p) => p.cityId))];
+  const boxDays = trip.days.filter((d) => boxCities.every((id) => d.cityIds.includes(id)));
+
+  const assignBox = (change: (current: Trip, ids: string[]) => Trip) => {
+    const ids = boxPlaces.map((p) => p.id);
+    update((current) => change(current, ids));
+    clearBox();
+    setSelectedId(null);
+  };
 
   const placeItem = (place: SavedPlace) => (
     <PlaceItem
@@ -415,6 +438,64 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             }}
             onPoiClick={onPoiClick}
           />
+          {step === 'days' && drawingBox && (
+            <BoxSelectLayer
+              onCancel={clearBox}
+              onSelect={(ids) => {
+                if (ids.length === 0) {
+                  setBoxEmpty(true);
+                  return;
+                }
+                setSelectedId(null);
+                setDrawingBox(false);
+                setBoxEmpty(false);
+                setBoxIds(ids);
+              }}
+            />
+          )}
+          {step === 'days' && cityPlaces.length > 0 && (
+            <div className="map-overlay">
+              {boxPlaces.length > 0 ? (
+                <div className="box-bar">
+                  <strong>{boxPlaces.length} {boxPlaces.length === 1 ? 'place' : 'places'}</strong>
+                  <div className="chips" role="group" aria-label="Add selected places to a day">
+                    {boxDays.map((day) => (
+                      <button
+                        key={day.id}
+                        className="chip day"
+                        style={{ '--chip-color': dayColor(day) } as React.CSSProperties}
+                        aria-label={`Add to day ${dayNumber(trip, day.id)}`}
+                        onClick={() => assignBox((current, ids) => assignPlaces(current, ids, day.id))}
+                      >
+                        {dayNumber(trip, day.id)}
+                      </button>
+                    ))}
+                    {boxCities.length === 1 && (
+                      <button className="chip add" onClick={() => assignBox((current, ids) => assignToNewDay(current, ids, boxCities[0]))}>
+                        <Plus size={17} aria-hidden="true" /> New day
+                      </button>
+                    )}
+                  </div>
+                  <button className="icon-button" title="Clear selection" aria-label="Clear selection" onClick={clearBox}><X size={20} aria-hidden="true" /></button>
+                </div>
+              ) : drawingBox ? (
+                <div className="box-bar drawing">
+                  <span className="grow">{boxEmpty ? 'No places in that box. Try again.' : 'Drag across the map to draw a box.'}</span>
+                  <button className="icon-button" title="Cancel" aria-label="Cancel drawing" onClick={clearBox}><X size={20} aria-hidden="true" /></button>
+                </div>
+              ) : (
+                <button
+                  className="primary map-draw"
+                  onClick={() => {
+                    setSelectedId(null);
+                    setDrawingBox(true);
+                  }}
+                >
+                  <SquareDashedMousePointer size={18} aria-hidden="true" /> Draw box
+                </button>
+              )}
+            </div>
+          )}
           {step === 'places' && hasCities && (
             <div className="map-overlay">
               <div className="map-search">

@@ -80,6 +80,16 @@ export function addPlaces(trip: Trip, cityId: string, placeIds: string[], mustHa
   return placeIds.reduce((current, placeId) => addPlace(current, { placeId, cityId, dayId: null, mustHave }), trip);
 }
 
+export function assignPlaces(trip: Trip, placeIds: string[], dayId: string): Trip {
+  const ids = new Set(placeIds);
+  return { ...trip, places: trip.places.map((place) => (ids.has(place.id) ? { ...place, dayId } : place)) };
+}
+
+export function assignToNewDay(trip: Trip, placeIds: string[], cityId: string): Trip {
+  const withDay = addDay(trip, cityId);
+  return assignPlaces(withDay, placeIds, withDay.days[withDay.days.length - 1].id);
+}
+
 /** Puts each group of saved places on its own day in a city, adding days if there aren't enough. */
 export function assignGroups(trip: Trip, cityId: string, groups: string[][]): Trip {
   let result = trip;

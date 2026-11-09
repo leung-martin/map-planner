@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addCity, addDay, addPlace, addPlaces, assignGroups, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, removeCity,
+  addCity, addDay, addPlace, addPlaces, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, removeCity,
   removeDay, shortLocation, tripNameFor, updateDay,
 } from './trip';
 import type { Trip } from './types';
@@ -63,6 +63,17 @@ describe('days', () => {
     trip = addPlace(trip, { placeId: 'b', cityId: rome.id, dayId: id });
     trip = updateDay(trip, id, { cityIds: [paris.id] });
     expect(trip.places.map((p) => p.dayId)).toEqual([id, null]);
+  });
+});
+
+describe('assignToNewDay', () => {
+  it('creates one day and moves only the chosen places onto it', () => {
+    let { trip, paris } = parisRome();
+    trip = addPlaces(trip, paris.id, ['a', 'b', 'c'], false);
+    const [a, b] = trip.places;
+    const result = assignToNewDay(trip, [a.id, b.id], paris.id);
+    expect(result.days).toHaveLength(1);
+    expect(result.places.map((p) => p.dayId)).toEqual([result.days[0].id, result.days[0].id, null]);
   });
 });
 
