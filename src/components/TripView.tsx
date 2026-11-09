@@ -9,7 +9,7 @@ import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
 import { useScoring } from '../useScoring';
 import {
-  addCity, addDay, addPlace, addPlaces, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, removeCity, removePlace, updatePlace,
+  addCity, addDay, addPlace, addPlaces, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { AutoGroupDialog } from './AutoGroupDialog';
@@ -429,7 +429,9 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             unscheduledKey={UNSCHEDULED}
             canAutoGroup={city !== null && mustHaves.length + maybes.length > 0}
             onSelect={setSelectedId}
-            onMove={(id, dayId) => update((current) => updatePlace(current, id, { dayId }))}
+            onMove={(id, dayId) => update((current) => movePlaceToEnd(current, id, dayId))}
+            onMoveBeside={(id, targetId, after) => update((current) => movePlaceBeside(current, id, targetId, after))}
+            onMoveDay={(dayId, targetId) => update((current) => moveDayOnto(current, dayId, targetId))}
             onChangePlace={(id, patch) => update((current) => updatePlace(current, id, patch))}
             onNewDayFor={(place) => update((current) => assignToNewDay(current, [place.id], place.cityId))}
             onFocus={(key) => setFocus(activeFocus === key ? ALL : key)}

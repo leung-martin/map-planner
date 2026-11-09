@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addCity, addDay, addPlace, addPlaces, assignableDays, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, removeCity,
-  removeDay, shortLocation, tripNameFor, updateDay,
+  addCity, addDay, addPlace, addPlaces, assignableDays, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, moveDayOnto,
+  movePlaceBeside, movePlaceToEnd, removeCity, removeDay, shortLocation, tripNameFor, updateDay,
 } from './trip';
 import type { Trip } from './types';
 
@@ -63,6 +63,50 @@ describe('days', () => {
     trip = addPlace(trip, { placeId: 'b', cityId: rome.id, dayId: id });
     trip = updateDay(trip, id, { cityIds: [paris.id] });
     expect(trip.places.map((p) => p.dayId)).toEqual([id, null]);
+  });
+});
+
+describe('drag reordering', () => {
+  function threeDays() {
+    let { trip, paris } = parisRome();
+    trip = addDay(trip, paris.id);
+    trip = addDay(trip, paris.id);
+    trip = addDay(trip, paris.id);
+    const [one, two, three] = trip.days.map((d) => d.id);
+    trip = addPlaces(trip, paris.id, ['a', 'b', 'c'], false);
+    trip = { ...trip, places: trip.places.map((p) => ({ ...p, dayId: one })) };
+    return { trip, one, two, three, ids: Object.fromEntries(trip.places.map((p) => [p.placeId, p.id])) };
+  }
+  const order = (trip: Trip) => trip.places.map((p) => p.placeId).join('');
+
+  it('moves a day to another day’s spot in either direction and keeps its color', () => {
+    const { trip, one, two, three } = threeDays();
+    expect(moveDayOnto(trip, one, three).days.map((d) => d.id)).toEqual([two, three, one]);
+    expect(moveDayOnto(trip, three, one).days.map((d) => d.id)).toEqual([three, one, two]);
+    expect(moveDayOnto(trip, one, three).days[2].colorIndex).toBe(0);
+    expect(moveDayOnto(trip, one, one)).toBe(trip);
+  });
+
+  it('puts a place before or after another', () => {
+    const { trip, ids } = threeDays();
+    expect(order(movePlaceBeside(trip, ids.c, ids.a, false))).toBe('cab');
+    expect(order(movePlaceBeside(trip, ids.a, ids.c, true))).toBe('bca');
+    expect(order(movePlaceBeside(trip, ids.a, ids.b, true))).toBe('bac');
+    expect(movePlaceBeside(trip, ids.a, ids.a, true)).toBe(trip);
+  });
+
+  it('takes on the day of the place it is dropped beside', () => {
+    const { trip, two, ids } = threeDays();
+    const moved = movePlaceToEnd(trip, ids.a, two);
+    const result = movePlaceBeside(moved, ids.b, ids.a, false);
+    expect(result.places.find((p) => p.id === ids.b)?.dayId).toBe(two);
+  });
+
+  it('puts a place last when dropped on a day itself', () => {
+    const { trip, one, ids } = threeDays();
+    const result = movePlaceToEnd(trip, ids.a, one);
+    expect(order(result)).toBe('bca');
+    expect(result.places[2].dayId).toBe(one);
   });
 });
 

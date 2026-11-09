@@ -232,6 +232,9 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .card-star { color: var(--accent); }
 .move-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 10px; border-top: 1px solid var(--accent-rule); }
 .move-name { max-width: 240px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.column-head[draggable] { cursor: grab; }
+.column-list li.drop-before { box-shadow: 0 -3px 0 var(--accent-rule); }
+.column-list li.drop-after { box-shadow: 0 3px 0 var(--accent-rule); }
 .move-bar .place-options { flex: 1 1 280px; }
 .place-options { display: flex; gap: 8px; min-width: 0; }
 .place-options select { flex: 1; min-width: 0; }

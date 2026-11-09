@@ -18,6 +18,8 @@ type Props = {
   canAutoGroup: boolean;
   onSelect(id: string | null): void;
   onMove(placeId: string, dayId: string | null): void;
+  onMoveBeside(placeId: string, targetId: string, after: boolean): void;
+  onMoveDay(dayId: string, targetId: string): void;
   onChangePlace(placeId: string, patch: Partial<SavedPlace>): void;
   onNewDayFor(place: SavedPlace): void;
   onFocus(key: string): void;
@@ -33,10 +35,19 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onChangePlace, onNewDayFor, onFocus, onAddDay, onEditDay, onAutoGroup,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onFocus, onAddDay, onEditDay, onAutoGroup,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingDayId, setDraggingDayId] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
+  const [overCard, setOverCard] = useState<{ id: string; after: boolean } | null>(null);
+
+  const endDrag = () => {
+    setDraggingId(null);
+    setDraggingDayId(null);
+    setOverKey(null);
+    setOverCard(null);
+  };
 
   const dragging = places.find((place) => place.id === draggingId);
   const selected = places.find((place) => place.id === selectedId);
@@ -49,8 +60,32 @@ export function DayBoard({
 
   const card = (place: SavedPlace) => {
     const info = details[place.placeId];
+    const column = days.find((day) => day.id === place.dayId);
+    const canDropBeside = Boolean(dragging && column && dragging.id !== place.id && accepts(dragging, column));
+    const lowerHalf = (event: DragEvent) => {
+      const box = event.currentTarget.getBoundingClientRect();
+      return event.clientY > box.top + box.height / 2;
+    };
     return (
-      <li key={place.id}>
+      <li
+        key={place.id}
+        className={overCard?.id === place.id ? (overCard.after ? 'drop-after' : 'drop-before') : undefined}
+        onDragOver={(event) => {
+          if (!canDropBeside) return;
+          event.preventDefault();
+          const after = lowerHalf(event);
+          if (overCard?.id !== place.id || overCard.after !== after) setOverCard({ id: place.id, after });
+        }}
+        onDrop={(event) => {
+          // A card let go over itself stays where it was.
+          if (dragging?.id === place.id) event.stopPropagation();
+          if (!canDropBeside) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onMoveBeside(dragging!.id, place.id, lowerHalf(event));
+          endDrag();
+        }}
+      >
         <button
           className={['card', place.id === selectedId && 'selected', !place.mustHave && 'maybe'].filter(Boolean).join(' ')}
           draggable
@@ -59,10 +94,7 @@ export function DayBoard({
             event.dataTransfer.effectAllowed = 'move';
             setDraggingId(place.id);
           }}
-          onDragEnd={() => {
-            setDraggingId(null);
-            setOverKey(null);
-          }}
+          onDragEnd={endDrag}
           onClick={() => onSelect(place.id === selectedId ? null : place.id)}
         >
           <span className="card-text">
@@ -86,15 +118,19 @@ export function DayBoard({
       if (!allowed) return;
       event.preventDefault();
       if (overKey !== key) setOverKey(key);
+      if (!(event.target as Element).closest('.column-list li')) setOverCard(null);
     },
     onDragLeave: (event: DragEvent) => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOverKey(null);
     },
     onDrop: (event: DragEvent) => {
       event.preventDefault();
-      setOverKey(null);
-      setDraggingId(null);
-      if (allowed) onMove(event.dataTransfer.getData('text/plain'), dayId);
+      if (allowed && draggingDayId) {
+        if (dayId) onMoveDay(draggingDayId, dayId);
+      } else if (allowed && draggingId) {
+        onMove(draggingId, dayId);
+      }
+      endDrag();
     },
   });
 
@@ -107,13 +143,13 @@ export function DayBoard({
     <section className="board-panel">
       <div className="board-tools">
         <h2 className="bar-title">Days</h2>
-        <p className="muted small grow">Drag places onto days, or tap one and choose a day.</p>
+        <p className="muted small grow">Drag places onto days and into order. Drag a day’s heading to move the day.</p>
         {canAutoGroup && <button className="chip add" onClick={onAutoGroup}><LayoutGrid size={17} aria-hidden="true" /> Auto-group</button>}
         <button className="chip add" onClick={onAddDay}><Plus size={17} aria-hidden="true" /> Day</button>
       </div>
 
       <div className="board">
-        <div className={columnClass(unscheduledKey, true)} {...dropProps(unscheduledKey, null, true)}>
+        <div className={columnClass(unscheduledKey, !draggingDayId)} {...dropProps(unscheduledKey, null, !draggingDayId)}>
           <h3 className="column-head">
             <button className="column-title" aria-pressed={focus === unscheduledKey} onClick={() => onFocus(unscheduledKey)}>
               To place <span className="muted small">{tray.length}</span>
@@ -124,11 +160,20 @@ export function DayBoard({
 
         {days.map((day) => {
           const number = dayNumber(trip, day.id);
-          const dayPlaces = places.filter((place) => place.dayId === day.id).sort(starredFirst);
-          const allowed = accepts(dragging ?? selected, day);
+          const dayPlaces = places.filter((place) => place.dayId === day.id);
+          const allowed = draggingDayId !== null || accepts(dragging ?? selected, day);
           return (
             <div key={day.id} className={columnClass(day.id, allowed)} data-day={number} {...dropProps(day.id, day.id, allowed)}>
-              <h3 className="column-head">
+              <h3
+                className="column-head"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.setData('text/plain', day.id);
+                  event.dataTransfer.effectAllowed = 'move';
+                  setDraggingDayId(day.id);
+                }}
+                onDragEnd={endDrag}
+              >
                 <button className="column-title" aria-pressed={focus === day.id} onClick={() => onFocus(day.id)}>
                   <span className="dot" style={{ background: dayColor(day) }}>{number}</span>
                   <span className="clip grow">

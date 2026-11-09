@@ -64,6 +64,16 @@ export function moveDay(trip: Trip, dayId: string, delta: -1 | 1): Trip {
   return { ...trip, days };
 }
 
+/** Moves a day to where another day currently sits. */
+export function moveDayOnto(trip: Trip, dayId: string, targetId: string): Trip {
+  const from = trip.days.findIndex((day) => day.id === dayId);
+  const to = trip.days.findIndex((day) => day.id === targetId);
+  if (from < 0 || to < 0 || from === to) return trip;
+  const days = [...trip.days];
+  days.splice(to, 0, ...days.splice(from, 1));
+  return { ...trip, days };
+}
+
 export function removeDay(trip: Trip, dayId: string): Trip {
   return {
     ...trip,
@@ -103,6 +113,23 @@ export function assignGroups(trip: Trip, cityId: string, groups: string[][]): Tr
 
 export function updatePlace(trip: Trip, id: string, patch: Partial<Omit<SavedPlace, 'id'>>): Trip {
   return { ...trip, places: trip.places.map((place) => (place.id === id ? { ...place, ...patch } : place)) };
+}
+
+/** Puts a place last in a day. A day's places are listed in the order they appear in `trip.places`. */
+export function movePlaceToEnd(trip: Trip, id: string, dayId: string | null): Trip {
+  const place = trip.places.find((p) => p.id === id);
+  if (!place) return trip;
+  return { ...trip, places: [...trip.places.filter((p) => p.id !== id), { ...place, dayId }] };
+}
+
+/** Puts a place directly before or after another one, on that one's day. */
+export function movePlaceBeside(trip: Trip, id: string, targetId: string, after: boolean): Trip {
+  const place = trip.places.find((p) => p.id === id);
+  const target = trip.places.find((p) => p.id === targetId);
+  if (!place || !target || id === targetId) return trip;
+  const places = trip.places.filter((p) => p.id !== id);
+  places.splice(places.indexOf(target) + (after ? 1 : 0), 0, { ...place, dayId: target.dayId });
+  return { ...trip, places };
 }
 
 export function removePlace(trip: Trip, id: string): Trip {
