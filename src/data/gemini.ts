@@ -2,7 +2,7 @@ import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from 'firebase/ai'
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { recaptchaSiteKey } from '../config';
 import { buildScorePrompt, parseScores, type PlaceToScore } from '../scoring';
-import { buildPrompt, parseIdeas, type PlaceIdea } from '../suggest';
+import { buildPrompt, parseIdeas, withFallback, type PlaceIdea } from '../suggest';
 import type { PlaceScores } from '../types';
 import { app } from './firebase';
 
@@ -19,19 +19,19 @@ if (recaptchaSiteKey) {
 
 const ai = getAI(app, { backend: new GoogleAIBackend() });
 
-const model = getGenerativeModel(ai, {
-  model: 'gemini-3.8-flash',
-  generationConfig: {
-    responseMimeType: 'application/json',
-    responseSchema: Schema.object({
-      properties: {
-        ideas: Schema.array({
-          items: Schema.object({ properties: { name: Schema.string(), why: Schema.string() } }),
-        }),
-      },
-    }),
-  },
-});
+const ideasConfig = {
+  responseMimeType: 'application/json',
+  responseSchema: Schema.object({
+    properties: {
+      ideas: Schema.array({
+        items: Schema.object({ properties: { name: Schema.string(), why: Schema.string() } }),
+      }),
+    },
+  }),
+};
+
+const ideasModel = getGenerativeModel(ai, { model: 'gemini-3.8-flash', generationConfig: ideasConfig });
+const ideasFallbackModel = getGenerativeModel(ai, { model: 'gemini-3.5-flash-lite', generationConfig: ideasConfig });
 
 // The lighter model, since every saved place makes one request.
 const scoringModel = getGenerativeModel(ai, {
@@ -55,6 +55,10 @@ export async function scorePlace(place: PlaceToScore): Promise<PlaceScores> {
 }
 
 export async function suggestPlaces(city: string, interests: string): Promise<PlaceIdea[]> {
-  const result = await model.generateContent(buildPrompt(city, interests));
+  const prompt = buildPrompt(city, interests);
+  const result = await withFallback(
+    () => ideasModel.generateContent(prompt),
+    () => ideasFallbackModel.generateContent(prompt),
+  );
   return parseIdeas(result.response.text());
 }

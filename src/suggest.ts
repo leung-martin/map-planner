@@ -37,9 +37,24 @@ export function parseIdeas(text: string): PlaceIdea[] {
   return ideas.slice(0, MAX_IDEAS);
 }
 
+const LIMIT_ERROR = /429|quota|resource.?exhausted|rate.?limit/i;
+const OVERLOAD_ERROR = /\b50[03]\b|high demand|overloaded|unavailable/i;
+
+/** Tries the second call only when the first model is overloaded or out of quota. */
+export async function withFallback<T>(primary: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
+  try {
+    return await primary();
+  } catch (reason) {
+    const text = reason instanceof Error ? reason.message : String(reason);
+    if (!LIMIT_ERROR.test(text) && !OVERLOAD_ERROR.test(text)) throw reason;
+    return fallback();
+  }
+}
+
 export function suggestionErrorMessage(reason: unknown): string {
   const text = reason instanceof Error ? reason.message : String(reason);
-  if (/429|quota|resource.?exhausted|rate.?limit/i.test(text)) return 'Gemini’s free limit is used up for now. Try again later.';
+  if (LIMIT_ERROR.test(text)) return 'Gemini’s free limit is used up for now. Try again later.';
+  if (OVERLOAD_ERROR.test(text)) return 'Gemini is very busy right now. Try again in a few minutes.';
   if (/app.?check|permission|403|deactivated|recaptcha/i.test(text)) return 'Gemini isn’t fully set up yet. SETUP.md explains the steps.';
   if (/unreadable/i.test(text)) return text;
   return 'Couldn’t reach Gemini. Check your connection and try again.';
