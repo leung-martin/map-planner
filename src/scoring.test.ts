@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScorePrompt, parseScores, RUBRIC_VERSION } from './scoring';
+import { buildScorePrompt, MAX_TOTAL, parseScores, RUBRIC_VERSION, totalScore } from './scoring';
 
 describe('buildScorePrompt', () => {
   it('names the place, its location, and all four dimensions', () => {
@@ -10,6 +10,13 @@ describe('buildScorePrompt', () => {
   });
   it('leaves no stray comma when the area is unknown', () => {
     expect(buildScorePrompt({ name: 'X', area: '', city: 'Tokyo' })).toContain('Location: Tokyo\n');
+  });
+});
+
+describe('totalScore', () => {
+  it('adds the four ratings, out of 20', () => {
+    expect(totalScore({ visual: 5, entertainment: 3, shopping: 4, culture: 2, rubric: RUBRIC_VERSION })).toBe(14);
+    expect(MAX_TOTAL).toBe(20);
   });
 });
 

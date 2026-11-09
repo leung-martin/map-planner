@@ -5,7 +5,7 @@ import { dayColor, dayNumber, googleMapsUrl } from '../trip';
 import type { SavedPlace, Trip } from '../types';
 import { MapsLink } from './Hud';
 import { LazyField } from './LazyField';
-import { ScoreMeters, ScoreStrip } from './Scores';
+import { ScoreStack, ScoreTotal } from './Scores';
 
 type Props = {
   trip: Trip;
@@ -60,15 +60,16 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
           </span>
         )}
         <MapsLink href={googleMapsUrl(place.placeId, loaded?.name ?? 'place')} name={name} />
+        {place.scores && !expanded && <ScoreStack scores={place.scores} />}
+        {place.scores && <ScoreTotal scores={place.scores} />}
       </div>
 
-      {!expanded && place.scores && <ScoreStrip scores={place.scores} />}
       {!expanded && place.notes && <p className="muted small note-peek">{place.notes}</p>}
 
       {expanded && (
         <div className="place-extra">
           {loaded?.photo && <Photo photo={loaded.photo} name={loaded.name} />}
-          {place.scores && <ScoreMeters scores={place.scores} />}
+          {place.scores && <ScoreStack scores={place.scores} labels />}
           <label>
             Note
             <LazyField label="Note" multiline value={place.notes} onCommit={(notes) => onChange({ notes })} />

@@ -4,7 +4,7 @@ import type { PlaceDetails } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
 import { MapsLink } from './Hud';
-import { ScoreStrip } from './Scores';
+import { ScoreStack, ScoreTotal } from './Scores';
 
 type Props = {
   trip: Trip;
@@ -62,12 +62,15 @@ export function DayBoard({
           }}
           onClick={() => onSelect(place.id === selectedId ? null : place.id)}
         >
-          <span className="card-name">
-            {place.mustHave && <span className="card-star" aria-label="Must-have">★ </span>}
-            {nameOf(place)}
+          <span className="card-text">
+            <span className="card-name">
+              {place.mustHave && <span className="card-star" aria-label="Must-have">★ </span>}
+              {nameOf(place)}
+            </span>
+            <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>
+            {place.scores && <ScoreTotal scores={place.scores} />}
           </span>
-          <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>
-          {place.scores && <ScoreStrip scores={place.scores} />}
+          {place.scores && <ScoreStack scores={place.scores} />}
         </button>
       </li>
     );

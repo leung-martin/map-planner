@@ -222,10 +222,14 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .column-title .clip { white-space: nowrap; text-overflow: ellipsis; }
 .column-list { flex: 1; min-height: 40px; overflow-y: auto; padding: 5px; }
 .column-add { flex: 0 0 120px; border: 1px dashed var(--accent); background: none; color: var(--accent); }
-.card { display: block; width: 100%; min-height: 0; padding: 6px 8px; margin-bottom: 5px; background: var(--bar); text-align: left; cursor: grab; }
+.card { display: flex; align-items: flex-start; gap: 6px; width: 100%; min-height: 0; padding: 6px 8px; margin-bottom: 5px; background: var(--bar); text-align: left; cursor: grab; }
+.card-text { flex: 1; min-width: 0; display: block; }
+.card .score-value { display: none; }
+.card .score-total { flex-direction: row; align-items: baseline; gap: 1px; min-width: 0; margin-top: 4px; padding: 1px 6px; }
+.card .score-total b { font-size: 0.95rem; }
 .card.selected { border-color: var(--accent-rule); outline: 1px solid var(--accent-rule); }
-.card-name, .card-location { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-name { font-weight: 500; }
+.card-location { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; line-height: 1.15; }
 .card-star { color: var(--accent); }
 .move-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 10px; border-top: 1px solid var(--accent-rule); }
 .move-name { max-width: 240px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
@@ -286,8 +290,9 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .place.expanded { border-color: var(--accent-rule); }
 .place-row { display: flex; align-items: center; gap: 8px; }
 .place-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; text-align: left; }
-.place-name, .place-location { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.place-name { font-weight: 500; font-size: 1.08rem; }
+.place-location { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Up to two lines, since the ratings share this row. */
+.place-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; font-size: 1.08rem; line-height: 1.15; }
 .maps-link { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; }
 .maps-link:hover { background: var(--bar); }
 .star { flex: none; width: 34px; min-height: 36px; padding: 0; border: 0; background: none; font-size: 1.35rem; line-height: 1; color: var(--maybe); }
@@ -296,14 +301,21 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .maybe-button { background: var(--maybe-fill); border-color: var(--maybe-fill); color: #1a1300; font-weight: 600; }
 .card.maybe { border-left: 4px solid var(--maybe-fill); }
 .score-status { margin-top: 8px; }
-.score-strip { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.place > .score-strip { padding-left: 42px; }
-.score { white-space: nowrap; }
-.score-meters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 0; }
-.score-meter dt { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.score-meter dd { display: flex; gap: 3px; margin: 3px 0 0; }
-.pip { flex: 1; height: 6px; background: var(--line); }
+.score-stack { flex: none; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+.score-row { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; line-height: 1; white-space: nowrap; }
+.score-icon { flex: none; width: 15px; font-size: 0.78rem; text-align: center; }
+.score-bars { flex: none; display: flex; gap: 2px; width: 44px; }
+.score-value { flex: none; width: 20px; color: var(--muted); text-align: right; }
+.pip { flex: 1; height: 7px; background: var(--line); }
 .pip.on { background: var(--accent-rule); }
+.score-stack.labelled { gap: 7px; }
+.score-stack.labelled .score-row { font-size: 0.95rem; gap: 8px; }
+.score-stack.labelled .score-icon { font-size: 1rem; width: 20px; }
+.score-stack.labelled .score-label { flex: 1; }
+.score-stack.labelled .score-bars { width: 110px; }
+.score-stack.labelled .score-value { width: 28px; }
+.score-total { flex: none; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 44px; align-self: stretch; padding: 3px 4px; background: var(--bar); border: 1px solid var(--line); font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.score-total b { font-size: 1.3rem; color: var(--ink); }
 .next-step { flex: none; padding: 8px 10px; border-top: 1px solid var(--line); }
 .next-step .primary { width: 100%; min-height: 46px; }
 .note-peek { margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -373,6 +385,7 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
   .trip { padding: 4px; gap: 4px; }
   .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: 30dvh minmax(0, 1fr); gap: 4px; }
   .workspace.days { grid-template-columns: minmax(0, 1fr); grid-template-rows: 22dvh minmax(0, 1fr); }
+  .place-row .score-value { display: none; }
   .map-overlay { top: 6px; left: 6px; right: 6px; }
   .map-suggest { width: 46px; padding: 0; }
   .map-suggest span { display: none; }

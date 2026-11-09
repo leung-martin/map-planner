@@ -12,7 +12,13 @@ export const DIMENSIONS: { key: DimensionKey; label: string; icon: string }[] = 
   { key: 'culture', label: 'Cultural Value', icon: '🎎' },
 ];
 
-export type PlaceToScore = { name: string; area: string; city: string };
+export const MAX_TOTAL = DIMENSIONS.length * 5;
+
+export function totalScore(scores: PlaceScores): number {
+  return DIMENSIONS.reduce((sum, { key }) => sum + scores[key], 0);
+}
+
+export type PlaceToScore ={ name: string; area: string; city: string };
 
 export type Scorer = (place: PlaceToScore) => Promise<PlaceScores>;
 
