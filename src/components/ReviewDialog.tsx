@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { distanceKm } from '../importKml';
 import type { MapsProvider, PlaceDetails } from '../maps/provider';
-import type { LatLng, Trip } from '../types';
+import { isInside } from '../suggest';
+import type { Bounds, LatLng, Trip } from '../types';
 
 export type ReviewPin = {
   name: string;
@@ -19,12 +20,14 @@ export type ReviewRequest = {
   /** A match further than this from its pin is probably a different place. */
   farKm: number;
   farNote: string;
+  /** Matches outside this area are left out of the list. */
+  within?: Bounds;
   preselect: boolean;
   starByDefault: boolean;
   cityId: string;
 };
 
-type Lookup = PlaceDetails | 'none' | 'error' | undefined;
+type Lookup = PlaceDetails | 'none' | 'error' | 'outside' | undefined;
 type Note = 'saved' | 'repeat' | 'far' | null;
 
 type Props = {
@@ -53,8 +56,9 @@ export function ReviewDialog({ trip, provider, request, onSave, onClose }: Props
     pins.forEach(async (pin, index) => {
       let result: Lookup;
       try {
-        const placeId = await provider.matchPlace(pin.query ?? pin.name, pin.location);
-        result = placeId ? await provider.getPlace(placeId) : 'none';
+        const placeId = await provider.matchPlace(pin.query ?? pin.name, pin.location, request.within);
+        const details = placeId ? await provider.getPlace(placeId) : null;
+        result = !details ? 'none' : request.within && !isInside(details.location, request.within) ? 'outside' : details;
       } catch {
         result = 'error';
       }
@@ -63,7 +67,7 @@ export function ReviewDialog({ trip, provider, request, onSave, onClose }: Props
     return () => {
       stale = true;
     };
-  }, [provider, pins]);
+  }, [provider, request]);
 
   const done = lookups.filter((lookup) => lookup !== undefined).length;
   const finished = done === pins.length;
@@ -81,8 +85,9 @@ export function ReviewDialog({ trip, provider, request, onSave, onClose }: Props
     }
     const selectable = details !== null && note !== 'saved' && note !== 'repeat';
     const byDefault = selectable && note !== 'far' && request.preselect;
-    return { pin, lookup, details, note, selectable, checked: selectable && byDefault !== flipped.has(index) };
+    return { index, pin, lookup, details, note, selectable, checked: selectable && byDefault !== flipped.has(index) };
   });
+  const listed = request.within ? rows.filter((row) => row.lookup !== 'none' && row.lookup !== 'outside') : rows;
 
   const noteText = { saved: 'Already in this trip', repeat: 'Listed twice', far: request.farNote };
   const chosen = rows.filter((row) => row.checked).map((row) => row.details!.placeId);
@@ -101,13 +106,15 @@ export function ReviewDialog({ trip, provider, request, onSave, onClose }: Props
 
       <p className="import-summary muted" role="status">
         {finished
-          ? `${chosen.length} of ${pins.length} selected${missed ? `, ${missed} not found` : ''}.`
+          ? listed.length === 0
+            ? 'None of Gemini’s ideas are in this part of the map. Zoom out and try again.'
+            : `${chosen.length} of ${listed.length} selected${missed && !request.within ? `, ${missed} not found` : ''}.`
           : `Matching places: ${done} of ${pins.length}`}
         {request.skipped > 0 && ` ${request.skipped} drawn line${request.skipped === 1 ? '' : 's'} left out.`}
       </p>
 
       <ul className="import-list">
-        {rows.map(({ pin, lookup, details, note, selectable, checked }, index) => (
+        {listed.map(({ index, pin, lookup, details, note, selectable, checked }) => (
           <li key={index}>
             <label className={selectable ? 'import-row' : 'import-row disabled'}>
               <input type="checkbox" checked={checked} disabled={!selectable} onChange={() => toggle(index)} />

@@ -1,14 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { buildPrompt, parseIdeas, suggestionErrorMessage, withFallback } from './suggest';
+import { buildPrompt, isInside, parseIdeas, suggestionErrorMessage, withFallback } from './suggest';
+
+const AREA = { north: 35.7, south: 35.6, east: 139.8, west: 139.7 };
 
 describe('buildPrompt', () => {
-  it('includes the city and interests when given', () => {
-    const prompt = buildPrompt('Tokyo', ' onsen, design ');
-    expect(prompt).toContain('in Tokyo');
+  it('includes the trip, the map area and the interests when given', () => {
+    const prompt = buildPrompt('Tokyo', ' onsen, design ', AREA);
+    expect(prompt).toContain('trip to Tokyo');
+    expect(prompt).toContain('latitude 35.6000 to 35.7000, longitude 139.7000 to 139.8000');
     expect(prompt).toContain('interests: onsen, design.');
   });
   it('asks for a mix when no interests are given', () => {
-    expect(buildPrompt('Tokyo', '  ')).toContain('Mix well-known');
+    expect(buildPrompt('Tokyo', '  ', AREA)).toContain('Mix well-known');
+  });
+});
+
+describe('isInside', () => {
+  it('accepts points in the area and rejects points past any edge', () => {
+    expect(isInside({ lat: 35.65, lng: 139.75 }, AREA)).toBe(true);
+    expect(isInside({ lat: 35.8, lng: 139.75 }, AREA)).toBe(false);
+    expect(isInside({ lat: 35.65, lng: 139.9 }, AREA)).toBe(false);
+  });
+  it('handles an area crossing the 180° meridian', () => {
+    const fiji = { north: -16, south: -19, east: -178, west: 177 };
+    expect(isInside({ lat: -17, lng: 179 }, fiji)).toBe(true);
+    expect(isInside({ lat: -17, lng: -179 }, fiji)).toBe(true);
+    expect(isInside({ lat: -17, lng: 170 }, fiji)).toBe(false);
   });
 });
 

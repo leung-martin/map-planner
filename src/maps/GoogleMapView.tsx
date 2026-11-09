@@ -1,13 +1,75 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { googleMapsMapId } from '../config';
 import { useTheme } from '../theme';
+import type { LatLng } from '../types';
 import { createPinElement } from './pin';
 import type { MapPin, MapViewProps } from './provider';
 import { loadGoogleMaps } from './googleProvider';
 
 type Libraries = { maps: google.maps.MapsLibrary; marker: google.maps.MarkerLibrary };
 
-export function GoogleMapView({ pins, fitKey, fallback, onPinClick, onPoiClick }: MapViewProps) {
+// Room left for the search bar that floats over the top of the map.
+const POPOUT_TOP_GAP = 68;
+const POPOUT_SIDE_GAP = 8;
+// Matches the card's offset in styles.css, which clears the pin.
+const POPOUT_ABOVE_POINT = 62;
+
+/** Keeps a card on a map position, and nudges the map once if the card would be cut off. */
+function Popout({ map, location, children }: { map: google.maps.Map; location: LatLng; children: ReactNode }) {
+  const [holder] = useState(() => {
+    const div = document.createElement('div');
+    div.className = 'map-popout';
+    google.maps.OverlayView.preventMapHitsAndGesturesFrom(div);
+    return div;
+  });
+
+  useEffect(() => {
+    /** Returns false while the pin isn't on screen yet, as when the map is still on its way there. */
+    const bringIntoView = () => {
+      const point = overlay.getProjection()?.fromLatLngToContainerPixel(location);
+      const area = map.getDiv();
+      if (!point || point.x < 0 || point.y < 0 || point.x > area.offsetWidth || point.y > area.offsetHeight) return false;
+      const halfWidth = holder.offsetWidth / 2;
+      const overLeft = point.x - halfWidth - POPOUT_SIDE_GAP;
+      const overRight = point.x + halfWidth + POPOUT_SIDE_GAP - area.offsetWidth;
+      const overTop = point.y - POPOUT_ABOVE_POINT - holder.offsetHeight - POPOUT_TOP_GAP;
+      const x = overLeft < 0 ? overLeft : Math.max(overRight, 0);
+      const y = Math.min(overTop, 0);
+      if (x || y) map.panBy(x, y);
+      return true;
+    };
+
+    let drawn = false;
+    const overlay = new google.maps.OverlayView();
+    overlay.onAdd = () => overlay.getPanes()!.floatPane.append(holder);
+    overlay.onRemove = () => holder.remove();
+    overlay.draw = () => {
+      const point = overlay.getProjection().fromLatLngToDivPixel(location);
+      if (!point) return;
+      holder.style.left = `${point.x}px`;
+      holder.style.top = `${point.y}px`;
+      if (!drawn) {
+        drawn = true;
+        // A map that is already in place never reports going idle.
+        if (map.getCenter()?.equals(new google.maps.LatLng(location)) && bringIntoView()) settled.remove();
+      }
+    };
+    // Waits for the map to finish moving to the pin, and only once so the user can then pan freely.
+    const settled = map.addListener('idle', () => {
+      if (bringIntoView()) settled.remove();
+    });
+    overlay.setMap(map);
+    return () => {
+      settled.remove();
+      overlay.setMap(null);
+    };
+  }, [map, holder, location.lat, location.lng]);
+
+  return createPortal(children, holder);
+}
+
+export function GoogleMapView({ pins, fitKey, fallback, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
@@ -16,8 +78,8 @@ export function GoogleMapView({ pins, fitKey, fallback, onPinClick, onPoiClick }
   const { resolved: theme } = useTheme();
 
   // Listeners live as long as the map, so they read the latest callbacks through a ref.
-  const callbacks = useRef({ onPinClick, onPoiClick });
-  callbacks.current = { onPinClick, onPoiClick };
+  const callbacks = useRef({ onPinClick, onPoiClick, onViewChange });
+  callbacks.current = { onPinClick, onPoiClick, onViewChange };
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +106,10 @@ export function GoogleMapView({ pins, fitKey, fallback, onPinClick, onPoiClick }
             event.stop();
             callbacks.current.onPoiClick(event.placeId);
           }
+        });
+        map.current.addListener('idle', () => {
+          const area = map.current?.getBounds()?.toJSON();
+          if (area) callbacks.current.onViewChange(area);
         });
         setLibraries({ maps, marker });
       })
@@ -98,6 +164,7 @@ export function GoogleMapView({ pins, fitKey, fallback, onPinClick, onPoiClick }
   return (
     <div className="map-fill">
       <div ref={element} className="map-canvas" />
+      {libraries && map.current && popout && <Popout map={map.current} location={popout.location}>{popout.content}</Popout>}
       {error && <div className="map-message">{error}</div>}
     </div>
   );

@@ -1,9 +1,10 @@
-import { LayoutGrid, Pencil, Plus } from 'lucide-react';
+import { House, LayoutGrid, Pencil, Plus } from 'lucide-react';
 import { useState, type DragEvent } from 'react';
 import type { PlaceDetails } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
 import { MapsLink } from './Hud';
+import { PlaceOptions } from './PlaceOptions';
 import { ScoreStack, ScoreTotal } from './Scores';
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
   canAutoGroup: boolean;
   onSelect(id: string | null): void;
   onMove(placeId: string, dayId: string | null): void;
+  onChangePlace(placeId: string, patch: Partial<SavedPlace>): void;
+  onNewDayFor(place: SavedPlace): void;
   onFocus(key: string): void;
   onAddDay(): void;
   onEditDay(dayId: string): void;
@@ -30,7 +33,7 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onFocus, onAddDay, onEditDay, onAutoGroup,
+  onSelect, onMove, onChangePlace, onNewDayFor, onFocus, onAddDay, onEditDay, onAutoGroup,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
@@ -64,7 +67,9 @@ export function DayBoard({
         >
           <span className="card-text">
             <span className="card-name">
-              {place.mustHave && <span className="card-star" aria-label="Must-have">★ </span>}
+              {place.homeBase
+                ? <span className="card-star" title="Home base"><House size={15} aria-hidden="true" /> </span>
+                : place.mustHave && <span className="card-star" aria-label="Must-have">★ </span>}
               {nameOf(place)}
             </span>
             <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>
@@ -96,7 +101,7 @@ export function DayBoard({
   const columnClass = (key: string, allowed: boolean) =>
     ['column', overKey === key && 'can-drop', !allowed && 'blocked', focus === key && 'focused'].filter(Boolean).join(' ');
 
-  const tray = places.filter((place) => place.dayId === null).sort(starredFirst);
+  const tray = places.filter((place) => place.dayId === null && !place.homeBase).sort(starredFirst);
 
   return (
     <section className="board-panel">
@@ -147,20 +152,12 @@ export function DayBoard({
         <div className="move-bar">
           <span className="move-name clip">{nameOf(selected)}</span>
           <MapsLink href={googleMapsUrl(selected.placeId, nameOf(selected))} name={nameOf(selected)} />
-          <div className="chips" role="group" aria-label="Move to day">
-            <button className={selected.dayId === null ? 'chip active' : 'chip'} onClick={() => onMove(selected.id, null)}>To place</button>
-            {days.filter((day) => accepts(selected, day)).map((day) => (
-              <button
-                key={day.id}
-                className={day.id === selected.dayId ? 'chip day active' : 'chip day'}
-                style={{ '--chip-color': dayColor(day) } as React.CSSProperties}
-                aria-label={`Move to day ${dayNumber(trip, day.id)}`}
-                onClick={() => onMove(selected.id, day.id)}
-              >
-                {dayNumber(trip, day.id)}
-              </button>
-            ))}
-          </div>
+          <PlaceOptions
+            trip={trip}
+            place={selected}
+            onChange={(patch) => onChangePlace(selected.id, patch)}
+            onNewDay={() => onNewDayFor(selected)}
+          />
         </div>
       )}
     </section>

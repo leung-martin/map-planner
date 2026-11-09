@@ -1,16 +1,28 @@
+import type { Bounds, LatLng } from './types';
+
 export type PlaceIdea = { name: string; why: string };
 
-export type Suggester = (city: string, interests: string) => Promise<PlaceIdea[]>;
+export type Suggester = (trip: string, interests: string, area: Bounds) => Promise<PlaceIdea[]>;
 
 const MAX_IDEAS = 15;
 
-// Only the city and the user's interests are sent. Google may use free-tier prompts to improve its products.
-export function buildPrompt(city: string, interests: string): string {
+/** Also handles an area that crosses the 180° meridian, where west is greater than east. */
+export function isInside({ lat, lng }: LatLng, area: Bounds): boolean {
+  const inLng = area.west <= area.east ? lng >= area.west && lng <= area.east : lng >= area.west || lng <= area.east;
+  return inLng && lat >= area.south && lat <= area.north;
+}
+
+// Only the trip name, the map area and the user's interests are sent. Google may use free-tier prompts to improve its products.
+export function buildPrompt(trip: string, interests: string, area: Bounds): string {
   const taste = interests.trim()
     ? `The traveler's interests: ${interests.trim()}.`
     : 'Mix well-known highlights with a few lesser-known favorites.';
+  const edge = (value: number) => value.toFixed(4);
   return (
-    `Suggest 12 real, currently open places worth visiting in ${city}. ${taste} ` +
+    `Suggest up to 12 real, currently open places worth visiting, for a trip to ${trip}. ` +
+    `Every place must be inside the area of the map the traveler is looking at: ` +
+    `latitude ${edge(area.south)} to ${edge(area.north)}, longitude ${edge(area.west)} to ${edge(area.east)}. ` +
+    `Leave out anything outside that area, however famous, and return fewer places rather than going outside it. ${taste} ` +
     'Use each place’s official name as it appears on Google Maps. ' +
     'For "why", write one short sentence of under 15 words.'
   );

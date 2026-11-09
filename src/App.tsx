@@ -16,7 +16,7 @@ const provider = googleMapsApiKey ? createGoogleProvider() : demoProvider;
 const suggest: Suggester | null = provider.demo
   ? demoSuggest
   : hasFirebase
-    ? (city, interests) => import('./data/gemini').then((gemini) => gemini.suggestPlaces(city, interests))
+    ? (trip, interests, area) => import('./data/gemini').then((gemini) => gemini.suggestPlaces(trip, interests, area))
     : null;
 
 const scorer: Scorer | null = provider.demo

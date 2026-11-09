@@ -3,7 +3,7 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-ch
 import { recaptchaSiteKey } from '../config';
 import { buildScorePrompt, parseScores, type PlaceToScore } from '../scoring';
 import { buildPrompt, parseIdeas, withFallback, type PlaceIdea } from '../suggest';
-import type { PlaceScores } from '../types';
+import type { Bounds, PlaceScores } from '../types';
 import { app } from './firebase';
 
 if (import.meta.env.DEV) {
@@ -54,8 +54,8 @@ export async function scorePlace(place: PlaceToScore): Promise<PlaceScores> {
   return parseScores(result.response.text());
 }
 
-export async function suggestPlaces(city: string, interests: string): Promise<PlaceIdea[]> {
-  const prompt = buildPrompt(city, interests);
+export async function suggestPlaces(trip: string, interests: string, area: Bounds): Promise<PlaceIdea[]> {
+  const prompt = buildPrompt(trip, interests, area);
   const result = await withFallback(
     () => ideasModel.generateContent(prompt),
     () => ideasFallbackModel.generateContent(prompt),

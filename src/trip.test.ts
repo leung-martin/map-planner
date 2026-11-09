@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addCity, addDay, addPlace, addPlaces, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, removeCity,
+  addCity, addDay, addPlace, addPlaces, assignableDays, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, removeCity,
   removeDay, shortLocation, tripNameFor, updateDay,
 } from './trip';
 import type { Trip } from './types';
@@ -63,6 +63,18 @@ describe('days', () => {
     trip = addPlace(trip, { placeId: 'b', cityId: rome.id, dayId: id });
     trip = updateDay(trip, id, { cityIds: [paris.id] });
     expect(trip.places.map((p) => p.dayId)).toEqual([id, null]);
+  });
+});
+
+describe('assignableDays', () => {
+  it('offers only the days that visit the place’s city, including travel days', () => {
+    let { trip, paris, rome } = parisRome();
+    trip = addDay(trip, paris.id);
+    trip = addDay(trip, rome.id);
+    trip = addDay(trip, paris.id);
+    trip = updateDay(trip, trip.days[2].id, { cityIds: [paris.id, rome.id] });
+    trip = addPlace(trip, { placeId: 'r', cityId: rome.id, dayId: null });
+    expect(assignableDays(trip, trip.places[0]).map((d) => d.id)).toEqual([trip.days[1].id, trip.days[2].id]);
   });
 });
 

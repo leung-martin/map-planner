@@ -109,6 +109,11 @@ export function removePlace(trip: Trip, id: string): Trip {
   return { ...trip, places: trip.places.filter((place) => place.id !== id) };
 }
 
+/** A place can only go on a day that visits its city. */
+export function assignableDays(trip: Trip, place: SavedPlace): Day[] {
+  return trip.days.filter((day) => day.cityIds.includes(place.cityId));
+}
+
 export function dayNumber(trip: Trip, dayId: string): number {
   return trip.days.findIndex((day) => day.id === dayId) + 1;
 }

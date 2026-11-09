@@ -38,6 +38,7 @@ type Step = 'places' | 'days';
 const ALL = 'all';
 const UNSCHEDULED = 'none';
 const MUST_HAVE_COLOR = '#bd5508';
+const HOME_COLOR = '#ffffff';
 const PLACES_PER_DAY = 4;
 
 function usePlaceDetails(provider: MapsProvider, placeIds: string[]) {
@@ -82,7 +83,8 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   const [cityBounds, setCityBounds] = useState<Bounds | null>(null);
   const { resolved: theme } = useTheme();
   const [reviewing, setReviewing] = useState<ReviewRequest | null>(null);
-  const [suggesting, setSuggesting] = useState(false);
+  const [suggestArea, setSuggestArea] = useState<Bounds | null>(null);
+  const mapArea = useRef<Bounds | null>(null);
   const [autoGrouping, setAutoGrouping] = useState(false);
   const [drawingBox, setDrawingBox] = useState(false);
   const [boxEmpty, setBoxEmpty] = useState(false);
@@ -128,7 +130,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
 
   const activeFocus = step === 'days' && (focus === UNSCHEDULED || days.some((d) => d.id === focus)) ? focus : ALL;
   const shown = useMemo(
-    () => cityPlaces.filter((p) => activeFocus === ALL || p.dayId === (activeFocus === UNSCHEDULED ? null : activeFocus)),
+    () => cityPlaces.filter((p) => p.homeBase || activeFocus === ALL || p.dayId === (activeFocus === UNSCHEDULED ? null : activeFocus)),
     [cityPlaces, activeFocus],
   );
 
@@ -142,8 +144,9 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
         id: place.id,
         placeId: place.placeId,
         location: info.location,
-        color: day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : MAYBE_COLOR,
-        label: day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
+        color: place.homeBase ? HOME_COLOR : day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : MAYBE_COLOR,
+        label: place.homeBase ? '' : day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
+        home: place.homeBase,
         title: info.name,
         selected: (place.id === selectedId && !preview) || boxIds.includes(place.id),
       });
@@ -231,12 +234,14 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
     update((current) => addDay(current, city?.id ?? lastCity ?? current.cities[0].id));
   };
 
-  const mustHaves = cityPlaces.filter((p) => p.mustHave);
-  const maybes = cityPlaces.filter((p) => !p.mustHave);
+  // A home base is where the days start from, so it isn't one of the places to fit into them.
+  const homeBases = cityPlaces.filter((p) => p.homeBase);
+  const mustHaves = cityPlaces.filter((p) => p.mustHave && !p.homeBase);
+  const maybes = cityPlaces.filter((p) => !p.mustHave && !p.homeBase);
 
   const applyAutoGroup = (dayCount: number, includeMaybes: boolean) => {
     if (!city) return;
-    const items = (includeMaybes ? cityPlaces : mustHaves).flatMap((place) => {
+    const items = (includeMaybes ? [...mustHaves, ...maybes] : mustHaves).flatMap((place) => {
       const info = details[place.placeId];
       return info && info !== 'error' ? [{ id: place.id, location: info.location }] : [];
     });
@@ -272,6 +277,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
         setSelectedId(place.id === selectedId ? null : place.id);
       }}
       onChange={(patch) => update((current) => updatePlace(current, place.id, patch))}
+      onNewDay={() => update((current) => assignToNewDay(current, [place.id], place.cityId))}
       onRemove={() => {
         update((current) => removePlace(current, place.id));
         setSelectedId(null);
@@ -327,6 +333,12 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
 
       <div className="list">
         {scoringMessage && <p className="muted small score-status" role="status">{scoringMessage}</p>}
+        {homeBases.length > 0 && (
+          <section>
+            <h3 className="day-heading"><span className="grow">Home base</span></h3>
+            <ul>{homeBases.map(placeItem)}</ul>
+          </section>
+        )}
         {mustHaves.length > 0 && (
           <section>
             <h3 className="day-heading"><span className="grow">★ Must-haves</span><span className="muted small">{mustHaves.length}</span></h3>
@@ -405,7 +417,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
         </div>
       </div>
 
-      <div className={step === 'days' ? 'workspace days' : 'workspace'}>
+      <div className={['workspace', step === 'days' && 'days', preview && 'previewing'].filter(Boolean).join(' ')}>
         {step === 'places' ? placesPanel : (
           <DayBoard
             trip={trip}
@@ -415,9 +427,11 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             selectedId={selectedId}
             focus={activeFocus}
             unscheduledKey={UNSCHEDULED}
-            canAutoGroup={city !== null && cityPlaces.length > 0}
+            canAutoGroup={city !== null && mustHaves.length + maybes.length > 0}
             onSelect={setSelectedId}
             onMove={(id, dayId) => update((current) => updatePlace(current, id, { dayId }))}
+            onChangePlace={(id, patch) => update((current) => updatePlace(current, id, patch))}
+            onNewDayFor={(place) => update((current) => assignToNewDay(current, [place.id], place.cityId))}
             onFocus={(key) => setFocus(activeFocus === key ? ALL : key)}
             onAddDay={onAddDay}
             onEditDay={setEditingDayId}
@@ -431,25 +445,52 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             pins={pins}
             fitKey={fitKey}
             fallback={cityBounds}
+            popout={preview && {
+              location: preview.details.location,
+              content: (
+                <PreviewCard
+                  key={preview.details.placeId}
+                  trip={trip}
+                  details={preview.details}
+                  existing={trip.places.find((p) => p.placeId === preview.details.placeId)}
+                  defaultCityId={previewCityId}
+                  onCancel={() => setPreview(null)}
+                  onShowExisting={(place) => {
+                    setPreview(null);
+                    if (city && city.id !== place.cityId) setTab(place.cityId);
+                    setSelectedId(place.id);
+                  }}
+                  onSave={(cityId, mustHave) => {
+                    update((current) => addPlace(current, { placeId: preview.details.placeId, cityId, dayId: null, mustHave }));
+                    if (city && city.id !== cityId) setTab(cityId);
+                    setPreview(null);
+                  }}
+                />
+              ),
+            }}
             onPinClick={(id) => {
               if (id === 'preview') return;
               setPreview(null);
               setSelectedId(id);
             }}
             onPoiClick={onPoiClick}
+            onViewChange={(area) => {
+              mapArea.current = area;
+            }}
           />
           {step === 'days' && drawingBox && (
             <BoxSelectLayer
               onCancel={clearBox}
               onSelect={(ids) => {
-                if (ids.length === 0) {
+                const toGroup = ids.filter((id) => !homeBases.some((p) => p.id === id));
+                if (toGroup.length === 0) {
                   setBoxEmpty(true);
                   return;
                 }
                 setSelectedId(null);
                 setDrawingBox(false);
                 setBoxEmpty(false);
-                setBoxIds(ids);
+                setBoxIds(toGroup);
               }}
             />
           )}
@@ -505,45 +546,33 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
                   onPick={pickSuggestion}
                 />
                 {suggest && (
-                  <button className="primary map-suggest" title="Suggest places" aria-label="Suggest places" onClick={() => setSuggesting(true)}>
+                  <button
+                    className="primary map-suggest"
+                    title="Suggest places in the area showing on the map"
+                    aria-label="Suggest places"
+                    onClick={() => {
+                      if (mapArea.current) setSuggestArea(mapArea.current);
+                      else setLookupError('The map is still loading. Try again in a moment.');
+                    }}
+                  >
                     <Sparkles size={18} aria-hidden="true" /> <span>Suggest places</span>
                   </button>
                 )}
               </div>
-              {preview && (
-                <PreviewCard
-                  key={preview.details.placeId}
-                  trip={trip}
-                  details={preview.details}
-                  existing={trip.places.find((p) => p.placeId === preview.details.placeId)}
-                  defaultCityId={previewCityId}
-                  onCancel={() => setPreview(null)}
-                  onShowExisting={(place) => {
-                    setPreview(null);
-                    if (city && city.id !== place.cityId) setTab(place.cityId);
-                    setSelectedId(place.id);
-                  }}
-                  onSave={(cityId, mustHave) => {
-                    update((current) => addPlace(current, { placeId: preview.details.placeId, cityId, dayId: null, mustHave }));
-                    if (city && city.id !== cityId) setTab(cityId);
-                    setPreview(null);
-                  }}
-                />
-              )}
             </div>
           )}
         </div>
       </div>
 
-      {suggesting && suggest && (
+      {suggestArea && suggest && (
         <SuggestDialog
-          trip={trip}
-          provider={provider}
+          tripLabel={city?.name ?? trip.name}
+          cityId={previewCityId}
+          area={suggestArea}
           suggest={suggest}
-          defaultCityId={previewCityId}
-          onClose={() => setSuggesting(false)}
+          onClose={() => setSuggestArea(null)}
           onResult={(request) => {
-            setSuggesting(false);
+            setSuggestArea(null);
             setReviewing(request);
           }}
         />
@@ -568,7 +597,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
           cityName={city.name}
           mustHaves={mustHaves.length}
           maybes={maybes.length}
-          defaultDays={days.length || Math.max(1, Math.ceil((mustHaves.length || cityPlaces.length) / PLACES_PER_DAY))}
+          defaultDays={days.length || Math.max(1, Math.ceil((mustHaves.length || maybes.length) / PLACES_PER_DAY))}
           ready={!cityPlaces.some((p) => details[p.placeId] === undefined)}
           onApply={applyAutoGroup}
           onClose={() => setAutoGrouping(false)}

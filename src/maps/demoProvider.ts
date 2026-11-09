@@ -1,5 +1,5 @@
 import { RUBRIC_VERSION, type PlaceToScore } from '../scoring';
-import type { PlaceIdea } from '../suggest';
+import { isInside, type PlaceIdea } from '../suggest';
 import type { Bounds, PlaceScores } from '../types';
 import { DemoMapView } from './DemoMapView';
 import type { MapsProvider, PlaceDetails, Suggestion } from './provider';
@@ -49,9 +49,8 @@ function details([placeId, name, area, city, lat, lng]: Row): PlaceDetails {
 
 const matches = (text: string, query: string) => text.toLowerCase().includes(query.trim().toLowerCase());
 
-export async function demoSuggest(cityName: string): Promise<PlaceIdea[]> {
-  const cityId = Object.keys(CITIES).find((id) => CITIES[id].name === cityName);
-  return DEMO_PLACES.filter((row) => row[3] === cityId).map((row) => ({ name: row[1], why: 'A sample idea for the demo.' }));
+export async function demoSuggest(_trip: string, _interests: string, area: Bounds): Promise<PlaceIdea[]> {
+  return DEMO_PLACES.filter(([, , , , lat, lng]) => isInside({ lat, lng }, area)).map((row) => ({ name: row[1], why: 'A sample idea for the demo.' }));
 }
 
 /** Made-up but repeatable scores, so the demo needs no Gemini. */

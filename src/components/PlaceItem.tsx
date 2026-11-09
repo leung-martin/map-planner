@@ -1,10 +1,11 @@
-import { Trash2 } from 'lucide-react';
+import { House, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import type { PlaceDetails, PlacePhoto } from '../maps/provider';
 import { dayColor, dayNumber, googleMapsUrl } from '../trip';
 import type { SavedPlace, Trip } from '../types';
 import { MapsLink } from './Hud';
 import { LazyField } from './LazyField';
+import { PlaceOptions } from './PlaceOptions';
 import { ScoreStack, ScoreTotal } from './Scores';
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   expanded: boolean;
   onToggle(): void;
   onChange(patch: Partial<SavedPlace>): void;
+  onNewDay(): void;
   onRemove(): void;
 };
 
@@ -25,7 +27,7 @@ function Photo({ photo, name }: { photo: PlacePhoto; name: string }) {
   );
 }
 
-export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, onRemove }: Props) {
+export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, onNewDay, onRemove }: Props) {
   const element = useRef<HTMLLIElement>(null);
   useEffect(() => {
     if (expanded) element.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -38,14 +40,18 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
   return (
     <li ref={element} className={expanded ? 'place expanded' : 'place'}>
       <div className="place-row">
-        <button
-          className={place.mustHave ? 'star on' : 'star'}
-          aria-pressed={Boolean(place.mustHave)}
-          aria-label={`Must-have: ${name}`}
-          onClick={() => onChange({ mustHave: !place.mustHave })}
-        >
-          {place.mustHave ? '★' : '☆'}
-        </button>
+        {place.homeBase ? (
+          <span className="home-mark" title="Home base"><House size={20} aria-hidden="true" /></span>
+        ) : (
+          <button
+            className={place.mustHave ? 'star on' : 'star'}
+            aria-pressed={Boolean(place.mustHave)}
+            aria-label={`Must-have: ${name}`}
+            onClick={() => onChange({ mustHave: !place.mustHave })}
+          >
+            {place.mustHave ? '★' : '☆'}
+          </button>
+        )}
         <button className="place-main" onClick={onToggle} aria-expanded={expanded}>
           <span className="clip">
             <span className="place-name">{name}</span>
@@ -68,6 +74,7 @@ export function PlaceItem({ trip, place, details, expanded, onToggle, onChange, 
 
       {expanded && (
         <div className="place-extra">
+          <PlaceOptions trip={trip} place={place} onChange={onChange} onNewDay={onNewDay} />
           {loaded?.photo && <Photo photo={loaded.photo} name={loaded.name} />}
           {place.scores && <ScoreStack scores={place.scores} labels />}
           <label>

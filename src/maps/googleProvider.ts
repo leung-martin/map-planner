@@ -55,6 +55,8 @@ function toDetails(place: google.maps.places.Place): PlaceDetails {
 
 const toBounds = (box: google.maps.LatLngBounds): Bounds => box.toJSON();
 
+const lngSpan = ({ east, west }: Bounds) => (east >= west ? east - west : east - west + 360);
+
 /** Runs at most `limit` tasks at once, so a large trip doesn't flood the API. */
 function limiter(limit: number) {
   let active = 0;
@@ -113,14 +115,15 @@ export function createGoogleProvider(): MapsProvider {
     searchPlaces: (input, near) => suggest({ input, ...(near ? { locationBias: near } : {}) }),
 
     // Requesting only the ID keeps this on Google's free, unlimited tier.
-    matchPlace: (textQuery, near) =>
+    matchPlace: (textQuery, near, within) =>
       limit(async () => {
         const { Place } = await placesLibrary();
         const { places } = await Place.searchByText({
           textQuery,
           fields: ['id'],
           maxResultCount: 1,
-          locationBias: { center: near, radius: 500 },
+          // Google rejects a restriction box covering most of the globe, as a fully zoomed-out map would.
+          ...(within && lngSpan(within) < 180 ? { locationRestriction: within } : { locationBias: { center: near, radius: 500 } }),
         });
         return places[0]?.id ?? null;
       }),

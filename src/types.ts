@@ -23,6 +23,8 @@ export type SavedPlace = {
   dayId: string | null;
   /** Missing on places saved before stars existed. */
   mustHave?: boolean;
+  /** A hotel or other place to stay: always on the map, and not something to schedule. */
+  homeBase?: boolean;
   /** Set once by Gemini in the background, and redone only when the rubric version changes. */
   scores?: PlaceScores;
   notes: string;
