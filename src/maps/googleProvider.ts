@@ -34,8 +34,8 @@ async function placesLibrary() {
 const DETAIL_FIELDS = ['displayName', 'addressComponents', 'location', 'photos'];
 
 function toDetails(place: google.maps.places.Place): PlaceDetails {
-  // Prefer a landscape photo, which suits the panel. Listing photos costs nothing; only loading one does.
-  const photo = place.photos?.find((p) => p.widthPx >= p.heightPx * 1.2) ?? place.photos?.[0];
+  // Google's first photo is the one that best shows the place, even when it's a tall one.
+  const photo = place.photos?.[0];
   return {
     placeId: place.id,
     name: place.displayName ?? 'Unnamed place',
