@@ -23,6 +23,20 @@ describe('checkPlace', () => {
     expect(checkPlace(item({ title: 'Drive to Vessel Inn' }), withAirport, both)).toEqual({ status: 'same-spot', at: hotel });
     expect(checkPlace(item({ title: 'Check in', where: 'Sapporo Grand Hotel' }), withAirport, both).status).toBe('missing');
   });
+  it('works for trips imported before where was kept, and finds a pinned name in the title', () => {
+    expect(checkPlace(item({ title: 'Breakfast at Hotel', notes: 'Vessel Inn Sapporo\nTime: TBD' }), trip, names)).toEqual({ status: 'same-spot', at: hotel });
+    expect(checkPlace(item({ title: 'Check into Vessel Inn Sapporo Nakajima Park' }), trip, names)).toEqual({ status: 'same-spot', at: hotel });
+  });
+  it('matches a chain only to a branch nearby', () => {
+    const sapporoIchiran = item({ id: 's', placeId: 'ich-s', cityId: 'c' });
+    const tokyoIchiran = item({ id: 't', placeId: 'ich-t', cityId: 'tokyo' });
+    const twoCities: Trip = { ...trip, cities: [...trip.cities, { id: 'tokyo', placeId: 'tk', name: 'Tokyo' }], places: [hotel, sapporoIchiran, tokyoIchiran] };
+    const branchNames = { ...names, 'ich-s': 'ICHIRAN Sapporo Susukino', 'ich-t': 'ICHIRAN Shibuya' };
+    expect(checkPlace(item({ title: 'Dinner — Ichiran Ramen', cityId: 'tokyo' }), twoCities, branchNames)).toEqual({ status: 'same-spot', at: tokyoIchiran });
+    expect(checkPlace(item({ title: 'Dinner — Ichiran Ramen', cityId: 'c' }), twoCities, branchNames)).toEqual({ status: 'same-spot', at: sapporoIchiran });
+    const onlySapporo = { ...twoCities, places: [hotel, sapporoIchiran] };
+    expect(checkPlace(item({ title: 'Dinner — Ichiran Ramen', cityId: 'tokyo' }), onlySapporo, branchNames).status).toBe('missing');
+  });
   it('skips plans that only name a city or a route, and ones marked as not a place', () => {
     expect(checkPlace(item({ title: 'Wake', where: 'Sapporo' }), trip, names).status).toBe('skipped');
     expect(checkPlace(item({ title: 'Bus', where: 'CTS -> Sapporo' }), trip, names).status).toBe('skipped');
