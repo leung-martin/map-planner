@@ -43,6 +43,8 @@ export type MapViewProps = {
   /** When this changes the map reframes to the pins, or to `fallback` if there are none. */
   fitKey: string;
   fallback: Bounds | null;
+  /** Frames just these pins when any of them are on the map, instead of all of them. */
+  fitIds?: string[];
   /** A card shown attached to a point on the map. */
   popout: { location: LatLng; content: ReactNode } | null;
   onPinClick(id: string): void;

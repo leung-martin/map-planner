@@ -19,12 +19,14 @@ function boundsAround(points: LatLng[]): Bounds {
 }
 
 /** A plain stand-in for the Google map, used only when no API key is set. */
-export function DemoMapView({ pins, fitKey, fallback, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
+export function DemoMapView({ pins, fitKey, fallback, fitIds, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
   // As on the real map, the frame changes only when fitKey does.
-  const latest = useRef({ pins, fallback });
-  latest.current = { pins, fallback };
+  const latest = useRef({ pins, fallback, fitIds });
+  latest.current = { pins, fallback, fitIds };
   const frame = useMemo(() => {
-    const { pins: current, fallback: area } = latest.current;
+    const { pins: all, fallback: area, fitIds: ids } = latest.current;
+    const chosen = ids ? all.filter((pin) => ids.includes(pin.id)) : [];
+    const current = chosen.length > 0 ? chosen : all;
     return current.length > 0 ? boundsAround(current.map((p) => p.location)) : (area ?? WORLD);
   }, [fitKey]);
 

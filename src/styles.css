@@ -455,16 +455,6 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .tile-bar .clip { min-width: 0; }
 
 /* Resizing the board beside the map, and making the board's sideways scroll easy to see. */
-.splitter { display: none; }
-@media (min-width: 761px) {
-  .workspace.days { grid-template-columns: minmax(0, var(--board-fr, 0.63fr)) 14px minmax(260px, var(--map-fr, 0.37fr)); gap: 0; }
-  .splitter { display: flex; align-items: center; justify-content: center; cursor: col-resize; touch-action: none; }
-  .splitter-grip { width: 4px; height: 56px; border-radius: 2px; background: var(--tick); opacity: 0.55; transition: opacity 0.12s, background 0.12s; }
-  .splitter:hover .splitter-grip, .splitter:focus-visible .splitter-grip, .splitter.dragging .splitter-grip { opacity: 1; background: var(--accent-rule); height: 96px; }
-  .splitter.dragging { cursor: col-resize; }
-  .workspace.days:has(.splitter.dragging) { user-select: none; }
-  .workspace.days:has(.splitter.dragging) .map-pane { pointer-events: none; }
-}
 .board-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
 .board-wrap .board { flex: 1; min-width: 0; scrollbar-width: auto; scrollbar-color: var(--accent-rule) var(--row); }
 .board-wrap::before, .board-wrap::after { content: ''; position: absolute; top: 0; bottom: 0; width: 56px; z-index: 2; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
@@ -480,7 +470,6 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .day-jump button { flex: none; width: 26px; min-height: 26px; padding: 0; border: 0; border-bottom: 3px solid transparent; color: #fff; font-size: 0.85rem; font-weight: 600; opacity: 0.4; }
 .day-jump button.in-view { opacity: 1; border-bottom-color: var(--ink); }
 @media (max-width: 760px) {
-  .workspace.days { gap: 4px; }
   .board-arrow { width: 38px; height: 38px; margin-top: -19px; }
   .day-jump { flex: 1 1 auto; }
 }
@@ -512,4 +501,34 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .check-search .search-results { position: static; max-height: 240px; }
 @media (max-width: 760px) {
   .check-row { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The schedule: a short map on top, the days board below, and a bar between them to resize. */
+.workspace.days { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(90px, var(--map-fr, 0.27fr)) 14px minmax(0, var(--board-fr, 0.73fr)); gap: 0; }
+.workspace.days .map-pane { order: 1; }
+.workspace.days .splitter { order: 2; }
+.workspace.days .board-panel { order: 3; }
+.splitter { display: flex; align-items: center; justify-content: center; cursor: row-resize; touch-action: none; }
+.splitter-grip { width: 64px; height: 4px; border-radius: 2px; background: var(--tick); opacity: 0.55; transition: opacity 0.12s, background 0.12s, width 0.12s; }
+.splitter:hover .splitter-grip, .splitter:focus-visible .splitter-grip, .splitter.dragging .splitter-grip { opacity: 1; background: var(--accent-rule); width: 120px; }
+.workspace.days:has(.splitter.dragging) { user-select: none; }
+.workspace.days:has(.splitter.dragging) .map-pane { pointer-events: none; }
+.schedule-bar { gap: 8px; padding-left: 2px; }
+.schedule-bar .theme-toggle { margin-right: 4px; }
+
+/* Editing a card, in a popup beside it. */
+.card-editor { position: fixed; z-index: 40; width: min(360px, calc(100vw - 16px)); display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; background: var(--solid); border: 1px solid var(--accent-rule); box-shadow: 0 12px 40px rgb(0 0 0 / 45%); color: var(--ink); }
+.card-editor-head { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.card-editor-head .move-name { flex: 1; min-width: 0; max-width: none; font-size: 1.05rem; }
+.card-editor .move-note { height: 6.5em; }
+@media (max-width: 760px) {
+  .workspace.days { grid-template-rows: minmax(80px, var(--map-fr, 0.27fr)) 18px minmax(0, var(--board-fr, 0.73fr)); }
+  .schedule-bar { flex-wrap: nowrap; padding-left: 0; }
+  .schedule-bar .steps { flex: 1 1 auto; width: auto; margin: 0; }
+  .schedule-bar .step { padding: 0 6px; }
+  .schedule-bar .steps { min-width: 0; }
+  .schedule-bar .step { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .schedule-bar .theme-toggle { flex: none; width: 42px; padding: 0; }
+  .schedule-bar .theme-toggle b { display: none; }
+  .card-editor { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto; max-height: 70dvh; overflow-y: auto; border-width: 2px 0 0; }
 }

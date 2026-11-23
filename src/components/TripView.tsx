@@ -19,7 +19,7 @@ import { DayBoard } from './DayBoard';
 import { DayDialog } from './DayDialog';
 import { SettingsMenu, ThemeToggle } from './Hud';
 import { ShareDialog } from './ShareDialog';
-import { Splitter, useBoardShare } from './Splitter';
+import { Splitter, useMapShare } from './Splitter';
 import { LazyField } from './LazyField';
 import { PlaceItem } from './PlaceItem';
 import { PreviewCard } from './PreviewCard';
@@ -82,7 +82,14 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   // A trip with days opens on its schedule; a new one starts by choosing places.
   const [step, setStep] = useState<Step>(trip.days.length > 0 ? 'days' : 'places');
   const workspace = useRef<HTMLDivElement>(null);
-  const [boardShare, setBoardShare] = useBoardShare();
+  const [mapShare, setMapShare] = useMapShare();
+  // Days showing on the board, which the map frames. Settles before reframing so scrolling doesn't jolt the map.
+  const [daysInView, setDaysInView] = useState<string[]>([]);
+  const [framedDays, setFramedDays] = useState<string[]>([]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setFramedDays(daysInView), 350);
+    return () => window.clearTimeout(timer);
+  }, [daysInView]);
   // A trip through several cities opens on all of them, which is how an imported itinerary reads best.
   const [tab, setTab] = useState(trip.cities.length === 1 ? trip.cities[0].id : ALL);
   const [focus, setFocus] = useState(ALL);
@@ -109,7 +116,8 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
     onChange(latest.current);
   };
 
-  const city = trip.cities.find((c) => c.id === tab) ?? null;
+  // The schedule covers the whole trip; city tabs belong to choosing places.
+  const city = step === 'places' ? trip.cities.find((c) => c.id === tab) ?? null : trip.cities.length === 1 ? trip.cities[0] : null;
   const activeTab = city ? tab : ALL;
 
   useEffect(() => {
@@ -179,10 +187,15 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   }, [shown, details, trip, selectedId, preview, boxIds]);
 
   const pending = shown.some((p) => !isEntry(p) && details[p.placeId] === undefined);
+  // In the schedule the map frames the days showing on the board, or all of them when one is in focus.
+  const fitIds = step === 'days' && activeFocus === ALL && framedDays.length
+    ? shown.filter((p) => p.dayId && framedDays.includes(p.dayId)).map((p) => p.id)
+    : undefined;
   const fitKey = [
     // The map is narrower in Plan days, so each step needs its own framing.
     step, activeTab, activeFocus, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
     preview?.fromSearch ? preview.details.placeId : '',
+    step === 'days' ? framedDays.join() : '',
   ].join('|');
 
   const goToStep = (next: Step) => {
@@ -394,54 +407,76 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
     </section>
   );
 
+  const stepButtons = (
+    <div className="steps" role="group" aria-label="Planning steps">
+      <button className={step === 'places' ? 'step active' : 'step'} aria-pressed={step === 'places'} onClick={() => goToStep('places')}>
+        <ListChecks size={18} aria-hidden="true" /> <b>1</b> Choose places
+      </button>
+      <button className={step === 'days' ? 'step active' : 'step'} aria-pressed={step === 'days'} onClick={() => goToStep('days')}>
+        <CalendarDays size={18} aria-hidden="true" /> <b>2</b> Plan days
+      </button>
+    </div>
+  );
+
   return (
     <div className="trip">
-      <header className="trip-header">
-        <a className="back" href="#/" aria-label="Back to trips" title="Back to trips"><ArrowLeft size={24} aria-hidden="true" /></a>
-        <LazyField
-          className="trip-name"
-          label="Trip name"
-          value={trip.name}
-          onCommit={(name) => name.trim() && update((current) => ({ ...current, name: name.trim() }))}
-        />
-        {me && (
-          <button className="icon-button" title="Share this trip" aria-label="Share this trip" onClick={() => setSharing(true)}>
-            <Users size={22} aria-hidden="true" />
-            {(trip.memberEmails?.length ?? 1) > 1 && <span className="share-count">{trip.memberEmails!.length}</span>}
-          </button>
-        )}
-        <ThemeToggle />
-      </header>
-
-      <div className="trip-nav">
-        <h2 className="bar-title">Cities</h2>
-        <nav className="city-tabs" aria-label="Cities">
-          {trip.cities.length > 1 && (
-            <button className={activeTab === ALL ? 'tab active' : 'tab'} onClick={() => setTab(ALL)}>
-              <Globe size={18} aria-hidden="true" /> Whole trip
+      {step === 'places' ? (
+        <>
+        <header className="trip-header">
+          <a className="back" href="#/" aria-label="Back to trips" title="Back to trips"><ArrowLeft size={24} aria-hidden="true" /></a>
+          <LazyField
+            className="trip-name"
+            label="Trip name"
+            value={trip.name}
+            onCommit={(name) => name.trim() && update((current) => ({ ...current, name: name.trim() }))}
+          />
+          {me && (
+            <button className="icon-button" title="Share this trip" aria-label="Share this trip" onClick={() => setSharing(true)}>
+              <Users size={22} aria-hidden="true" />
+              {(trip.memberEmails?.length ?? 1) > 1 && <span className="share-count">{trip.memberEmails!.length}</span>}
             </button>
           )}
-          {trip.cities.map((c) => (
-            <button key={c.id} className={activeTab === c.id ? 'tab active' : 'tab'} onClick={() => setTab(c.id)}>
-              {c.name}
-            </button>
-          ))}
-          <button className="tab add" onClick={() => setAddingCity((open) => !open)}><Plus size={18} aria-hidden="true" /> City</button>
-        </nav>
-        <div className="steps" role="group" aria-label="Planning steps">
-          <button className={step === 'places' ? 'step active' : 'step'} aria-pressed={step === 'places'} onClick={() => goToStep('places')}>
-            <ListChecks size={18} aria-hidden="true" /> <b>1</b> Choose places
-          </button>
-          <button className={step === 'days' ? 'step active' : 'step'} aria-pressed={step === 'days'} onClick={() => goToStep('days')}>
-            <CalendarDays size={18} aria-hidden="true" /> <b>2</b> Plan days
-          </button>
+          <ThemeToggle />
+        </header>
+
+        <div className="trip-nav">
+          <h2 className="bar-title">Cities</h2>
+          <nav className="city-tabs" aria-label="Cities">
+            {trip.cities.length > 1 && (
+              <button className={activeTab === ALL ? 'tab active' : 'tab'} onClick={() => setTab(ALL)}>
+                <Globe size={18} aria-hidden="true" /> Whole trip
+              </button>
+            )}
+            {trip.cities.map((c) => (
+              <button key={c.id} className={activeTab === c.id ? 'tab active' : 'tab'} onClick={() => setTab(c.id)}>
+                {c.name}
+              </button>
+            ))}
+            <button className="tab add" onClick={() => setAddingCity((open) => !open)}><Plus size={18} aria-hidden="true" /> City</button>
+          </nav>
+          {stepButtons}
         </div>
-      </div>
+        </>
+      ) : (
+        // The schedule spends the room on days and the map; the trip's name and cities stay with choosing places.
+        <div className="trip-nav schedule-bar">
+          <a className="back" href="#/" aria-label="Back to trips" title="Back to trips"><ArrowLeft size={24} aria-hidden="true" /></a>
+          {stepButtons}
+          <span className="grow" />
+          {me && (
+            <button className="icon-button" title="Share this trip" aria-label="Share this trip" onClick={() => setSharing(true)}>
+              <Users size={22} aria-hidden="true" />
+              {(trip.memberEmails?.length ?? 1) > 1 && <span className="share-count">{trip.memberEmails!.length}</span>}
+            </button>
+          )}
+          <ThemeToggle />
+        </div>
+      )}
 
       <div
         ref={workspace}
         className={['workspace', step === 'days' && 'days', preview && 'previewing'].filter(Boolean).join(' ')}
-        style={{ '--board-fr': `${boardShare}fr`, '--map-fr': `${1 - boardShare}fr` } as CSSProperties}
+        style={{ '--map-fr': `${mapShare}fr`, '--board-fr': `${1 - mapShare}fr` } as CSSProperties}
       >
         {step === 'places' ? placesPanel : (
           <DayBoard
@@ -469,15 +504,17 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onEditDay={setEditingDayId}
             onAutoGroup={() => setAutoGrouping(true)}
             onCheckPlaces={() => setChecking(true)}
+            onDaysInView={setDaysInView}
           />
         )}
-        {step === 'days' && <Splitter container={workspace} value={boardShare} onChange={setBoardShare} />}
+        {step === 'days' && <Splitter container={workspace} value={mapShare} onChange={setMapShare} />}
 
         <div className="map-pane hud-frame">
           <MapView
             key={theme}
             pins={pins}
             fitKey={fitKey}
+            fitIds={fitIds}
             fallback={cityBounds}
             popout={preview && {
               location: preview.details.location,

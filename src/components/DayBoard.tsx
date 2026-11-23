@@ -1,5 +1,6 @@
-import { ChevronLeft, ChevronRight, House, MapPinned, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type WheelEvent } from 'react';
+import { ChevronLeft, ChevronRight, House, MapPinned, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent, type WheelEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { PlaceDetails } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl, inDayOrder, isEntry, timeRange } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
@@ -30,6 +31,8 @@ type Props = {
   onEditDay(dayId: string): void;
   onAutoGroup(): void;
   onCheckPlaces(): void;
+  /** The days showing on the board, as it scrolls. */
+  onDaysInView(dayIds: string[]): void;
 };
 
 const starredFirst = (a: SavedPlace, b: SavedPlace) => Number(Boolean(b.mustHave)) - Number(Boolean(a.mustHave));
@@ -55,7 +58,7 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -91,6 +94,57 @@ export function DayBoard({
     };
   }, [measure]);
   useEffect(measure, [measure, days]);
+
+  useEffect(() => onDaysInView(inView), [inView]);
+
+  // The editor floats beside the selected card, or over the board when the place has no card (a home base).
+  const editor = useRef<HTMLDivElement>(null);
+  const [editorPos, setEditorPos] = useState<CSSProperties | null>(null);
+  useLayoutEffect(() => {
+    setEditorPos(null);
+    if (!selectedId) return;
+    const place = () => {
+      const panel = editor.current;
+      if (!panel) return;
+      if (window.innerWidth <= 760) return setEditorPos({});
+      const w = panel.offsetWidth;
+      const h = panel.offsetHeight;
+      const card = board.current?.querySelector('.card.selected')?.getBoundingClientRect();
+      const area = card ?? board.current?.getBoundingClientRect();
+      if (!area) return;
+      let left = card ? card.right + 8 : area.left + (area.width - w) / 2;
+      if (card && left + w > innerWidth - 8) left = card.left - 8 - w;
+      left = Math.max(8, Math.min(innerWidth - w - 8, left));
+      const top = Math.max(8, Math.min(innerHeight - h - 8, card ? card.top : area.top + 40));
+      setEditorPos({ left, top });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    if (editor.current) observer.observe(editor.current);
+    window.addEventListener('resize', place);
+    document.addEventListener('scroll', place, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', place);
+      document.removeEventListener('scroll', place, true);
+    };
+  }, [selectedId]);
+
+  // Escape or a tap elsewhere closes the editor. Cards and the map pick a new selection themselves.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onSelect(null);
+    const onDown = (event: PointerEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.card-editor, .card, .map-pane, dialog')) onSelect(null);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [selectedId]);
 
   // Whatever gets selected, on the map or elsewhere, is brought into view on the board.
   useEffect(() => {
@@ -308,30 +362,41 @@ export function DayBoard({
       </div>
       </div>
 
-      {selected && (
-        <div className="move-bar">
-          {isEntry(selected) ? (
-            <LazyField
-              key={selected.id}
-              className="move-name"
-              label="Plan"
-              value={selected.title ?? ''}
-              onCommit={(title) => title.trim() && onChangePlace(selected.id, { title: title.trim() })}
-            />
-          ) : (
-            <>
-              <span className="move-name clip">{nameOf(selected)}</span>
-              <MapsLink href={googleMapsUrl(selected.placeId, nameOf(selected))} name={nameOf(selected)} />
-            </>
-          )}
-          <button
-            className="icon-button danger"
-            title="Remove from trip"
-            aria-label={`Remove ${nameOf(selected)} from trip`}
-            onClick={() => window.confirm(`Remove “${nameOf(selected)}” from this trip?`) && onRemove(selected.id)}
-          >
-            <Trash2 size={20} aria-hidden="true" />
-          </button>
+      {selected && createPortal(
+        <div
+          ref={editor}
+          className="card-editor"
+          role="dialog"
+          aria-label={`Edit ${nameOf(selected)}`}
+          style={editorPos ?? { visibility: 'hidden' }}
+        >
+          <div className="card-editor-head">
+            {isEntry(selected) ? (
+              <LazyField
+                key={selected.id}
+                className="move-name"
+                label="Plan"
+                value={selected.title ?? ''}
+                onCommit={(title) => title.trim() && onChangePlace(selected.id, { title: title.trim() })}
+              />
+            ) : (
+              <>
+                <span className="move-name clip">{nameOf(selected)}</span>
+                <MapsLink href={googleMapsUrl(selected.placeId, nameOf(selected))} name={nameOf(selected)} />
+              </>
+            )}
+            <button
+              className="icon-button danger"
+              title="Remove from trip"
+              aria-label={`Remove ${nameOf(selected)} from trip`}
+              onClick={() => window.confirm(`Remove “${nameOf(selected)}” from this trip?`) && onRemove(selected.id)}
+            >
+              <Trash2 size={20} aria-hidden="true" />
+            </button>
+            <button className="icon-button" title="Close" aria-label="Close" onClick={() => onSelect(null)}>
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
           <PlaceOptions
             trip={trip}
             place={selected}
@@ -347,7 +412,8 @@ export function DayBoard({
             value={selected.notes}
             onCommit={(notes) => onChangePlace(selected.id, { notes })}
           />
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );

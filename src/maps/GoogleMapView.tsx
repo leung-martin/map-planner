@@ -69,7 +69,7 @@ function Popout({ map, location, children }: { map: google.maps.Map; location: L
   return createPortal(children, holder);
 }
 
-export function GoogleMapView({ pins, fitKey, fallback, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
+export function GoogleMapView({ pins, fitKey, fallback, fitIds, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
@@ -137,11 +137,13 @@ export function GoogleMapView({ pins, fitKey, fallback, popout, onPinClick, onPo
   }, [libraries, pins]);
 
   // Reframing depends only on fitKey, so changing a pin's day doesn't move the map.
-  const latest = useRef({ pins, fallback });
-  latest.current = { pins, fallback };
+  const latest = useRef({ pins, fallback, fitIds });
+  latest.current = { pins, fallback, fitIds };
   useEffect(() => {
     if (!libraries || !map.current) return;
-    const { pins: current, fallback: area } = latest.current;
+    const { pins: all, fallback: area, fitIds: ids } = latest.current;
+    const chosen = ids ? all.filter((pin) => ids.includes(pin.id)) : [];
+    const current = chosen.length > 0 ? chosen : all;
     if (current.length > 1) {
       const box = new google.maps.LatLngBounds();
       current.forEach((pin) => box.extend(pin.location));
