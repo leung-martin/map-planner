@@ -4,17 +4,19 @@ import type { Suggestion } from '../maps/provider';
 type Props = {
   placeholder: string;
   autoFocus?: boolean;
+  /** Starts with this typed in and its results showing. */
+  initialQuery?: string;
   search(query: string): Promise<Suggestion[]>;
   onPick(suggestion: Suggestion): void;
   /** Enter pressed with nothing typed. */
   onEmptyEnter?(): void;
 };
 
-export function SearchBox({ placeholder, autoFocus, search, onPick, onEmptyEnter }: Props) {
-  const [query, setQuery] = useState('');
+export function SearchBox({ placeholder, autoFocus, initialQuery, search, onPick, onEmptyEnter }: Props) {
+  const [query, setQuery] = useState(initialQuery ?? '');
   const [results, setResults] = useState<Suggestion[]>([]);
   const [active, setActive] = useState(0);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(initialQuery));
   const [status, setStatus] = useState('');
   const searchRef = useRef(search);
   searchRef.current = search;

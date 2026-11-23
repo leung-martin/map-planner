@@ -1,5 +1,5 @@
-import { House, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState, type DragEvent, type FormEvent } from 'react';
+import { ChevronLeft, ChevronRight, House, MapPinned, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type WheelEvent } from 'react';
 import type { PlaceDetails } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl, inDayOrder, isEntry, timeRange } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
@@ -29,6 +29,7 @@ type Props = {
   onAddDay(): void;
   onEditDay(dayId: string): void;
   onAutoGroup(): void;
+  onCheckPlaces(): void;
 };
 
 const starredFirst = (a: SavedPlace, b: SavedPlace) => Number(Boolean(b.mustHave)) - Number(Boolean(a.mustHave));
@@ -54,9 +55,68 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const board = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ left: false, right: false });
+  const [inView, setInView] = useState<string[]>([]);
+
+  /** Which way the board can still scroll, and which days are showing. */
+  const measure = useCallback(() => {
+    const el = board.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setMore((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+    const box = el.getBoundingClientRect();
+    const showing = [...el.querySelectorAll<HTMLElement>('[data-day-id]')]
+      .filter((column) => {
+        const r = column.getBoundingClientRect();
+        return r.right > box.left + 40 && r.left < box.right - 40;
+      })
+      .map((column) => column.dataset.dayId!);
+    setInView((prev) => (prev.join() === showing.join() ? prev : showing));
+  }, []);
+
+  useEffect(() => {
+    const el = board.current;
+    if (!el) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    el.addEventListener('scroll', measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      el.removeEventListener('scroll', measure);
+    };
+  }, [measure]);
+  useEffect(measure, [measure, days]);
+
+  // Whatever gets selected, on the map or elsewhere, is brought into view on the board.
+  useEffect(() => {
+    if (selectedId) board.current?.querySelector('.card.selected')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [selectedId]);
+
+  const scrollPage = (direction: -1 | 1) => {
+    const el = board.current;
+    if (el) el.scrollBy({ left: direction * Math.max(220, el.clientWidth * 0.8), behavior: 'smooth' });
+  };
+
+  const jumpTo = (dayId: string) => {
+    const el = board.current;
+    const column = el?.querySelector(`[data-day-id="${dayId}"]`);
+    if (!el || !column) return;
+    const offset = column.getBoundingClientRect().left - el.getBoundingClientRect().left;
+    el.scrollTo({ left: el.scrollLeft + offset - 48, behavior: 'smooth' });
+  };
+
+  // A mouse wheel over headings or gaps scrolls sideways; over a day's list it still scrolls the list.
+  const onWheel = (event: WheelEvent) => {
+    const el = board.current;
+    if (!el || event.shiftKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+    if ((event.target as Element).closest('.column-list, textarea, select')) return;
+    el.scrollLeft += event.deltaY;
+  };
   const [draggingDayId, setDraggingDayId] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
   const [overCard, setOverCard] = useState<{ id: string; after: boolean } | null>(null);
@@ -165,13 +225,44 @@ export function DayBoard({
     <section className="board-panel">
       <div className="board-tools">
         <h2 className="bar-title">Days</h2>
-        <p className="muted small grow">Drag places onto days and into order. Drag a day’s heading to move the day.</p>
+        <p className="muted small grow board-hint">Drag places onto days and into order. Drag a day’s heading to move the day.</p>
+        {days.length > 1 && (
+          <nav className="day-jump" aria-label="Jump to a day">
+            {days.map((day) => {
+              const number = dayNumber(trip, day.id);
+              return (
+                <button
+                  key={day.id}
+                  className={inView.includes(day.id) ? 'in-view' : ''}
+                  style={{ background: dayColor(day) }}
+                  title={`Day ${number} · ${dayRoute(trip, day)}`}
+                  aria-label={`Show day ${number}`}
+                  onClick={() => jumpTo(day.id)}
+                >
+                  {number}
+                </button>
+              );
+            })}
+          </nav>
+        )}
+        <button className="chip add" onClick={onCheckPlaces} title="Check each place landed on the right spot"><MapPinned size={17} aria-hidden="true" /> Check places</button>
         {canAutoGroup && <button className="chip add" onClick={onAutoGroup}><LayoutGrid size={17} aria-hidden="true" /> Auto-group</button>}
         <button className="chip add" onClick={onAddDay}><Plus size={17} aria-hidden="true" /> Day</button>
       </div>
 
-      <div className="board">
-        <div className={columnClass(unscheduledKey, !draggingDayId)} {...dropProps(unscheduledKey, null, !draggingDayId)}>
+      <div className={['board-wrap', more.left && 'more-left', more.right && 'more-right'].filter(Boolean).join(' ')}>
+      {more.left && (
+        <button className="board-arrow left" aria-label="Scroll to earlier days" onClick={() => scrollPage(-1)} onDragOver={() => board.current?.scrollBy({ left: -24 })}>
+          <ChevronLeft size={26} aria-hidden="true" />
+        </button>
+      )}
+      {more.right && (
+        <button className="board-arrow right" aria-label="Scroll to later days" onClick={() => scrollPage(1)} onDragOver={() => board.current?.scrollBy({ left: 24 })}>
+          <ChevronRight size={26} aria-hidden="true" />
+        </button>
+      )}
+      <div className="board" ref={board} onWheel={onWheel}>
+        <div className={`${columnClass(unscheduledKey, !draggingDayId)}${tray.length === 0 ? ' tray-empty' : ''}`} {...dropProps(unscheduledKey, null, !draggingDayId)}>
           <h3 className="column-head">
             <button className="column-title" aria-pressed={focus === unscheduledKey} onClick={() => onFocus(unscheduledKey)}>
               To place <span className="muted small">{tray.length}</span>
@@ -185,7 +276,7 @@ export function DayBoard({
           const dayPlaces = inDayOrder(places.filter((place) => place.dayId === day.id));
           const allowed = draggingDayId !== null || accepts(dragging ?? selected, day);
           return (
-            <div key={day.id} className={columnClass(day.id, allowed)} data-day={number} {...dropProps(day.id, day.id, allowed)}>
+            <div key={day.id} className={columnClass(day.id, allowed)} data-day={number} data-day-id={day.id} {...dropProps(day.id, day.id, allowed)}>
               <h3
                 className="column-head"
                 draggable
@@ -214,6 +305,7 @@ export function DayBoard({
         })}
 
         <button className="column-add" onClick={onAddDay}><Plus size={18} aria-hidden="true" /> Add a day</button>
+      </div>
       </div>
 
       {selected && (

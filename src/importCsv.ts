@@ -117,7 +117,7 @@ const AREA_TYPES = new Set([
 const isVenue = (found: FoundPlace) => !found.types.some((type) => AREA_TYPES.has(type));
 
 // Routes ("YYZ -> HND") and placeholders can't be looked up.
-const searchable = (text: string) => Boolean(text) && !/->|→|\bto\b.*\bto\b/i.test(text) && !/^(in flight|tbd|n\/a|-)$/i.test(text);
+export const searchable = (text: string) => Boolean(text) && !/->|→|\bto\b.*\bto\b/i.test(text) && !/^(in flight|tbd|n\/a|-)$/i.test(text);
 
 /**
  * A place named only in the activity, as in "Lunch — Tokuichi Ramen" or "Head to Hill of the Buddha".
@@ -267,6 +267,7 @@ export async function buildTrip(
         cityId: cityIds.get(found.city) ?? day?.cityIds[0] ?? cities[0].id,
         dayId,
         mustHave: row.record_type !== 'wishlist_idea',
+        ...(row.location_or_route ? { where: row.location_or_route } : {}),
         notes: notesFor(row, [row.activity_or_item !== found.name ? row.activity_or_item : undefined, timeNote, dateNote]),
         ...times,
       });
@@ -282,6 +283,7 @@ export async function buildTrip(
       title,
       cityId: day && !day.cityIds.includes(cityId) ? day.cityIds[0] : cityId,
       dayId,
+      ...(row.location_or_route ? { where: row.location_or_route } : {}),
       notes: notesFor(row, [where, timeNote, dateNote]),
       ...times,
     });

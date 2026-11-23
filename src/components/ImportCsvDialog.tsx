@@ -139,6 +139,7 @@ export function ImportCsvDialog({ provider, onImport, onClose }: Props) {
       {stage.kind === 'finished' && (
         <>
           <ul className="import-results">{stage.lines.map((line) => <li key={line}>{line}</li>)}</ul>
+          <p className="muted small dialog-hint">Some places may not have matched. Open a trip and use <b>Check places</b> on its days to pin or fix them.</p>
           <div className="dialog-row">
             <button className="primary" onClick={() => dialog.current?.close()}>Done</button>
           </div>

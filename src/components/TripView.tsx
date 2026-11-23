@@ -1,6 +1,6 @@
 import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, SquareDashedMousePointer, Upload, Users, X } from 'lucide-react';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { groupByLocation } from '../autoGroup';
 import { KmlError, parseKml } from '../importKml';
 import type { MapPin, MapsProvider, PlaceDetails, Suggestion } from '../maps/provider';
@@ -13,11 +13,13 @@ import {
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { AutoGroupDialog } from './AutoGroupDialog';
+import { CheckPlacesDialog } from './CheckPlacesDialog';
 import { BoxSelectLayer } from './BoxSelectLayer';
 import { DayBoard } from './DayBoard';
 import { DayDialog } from './DayDialog';
 import { SettingsMenu, ThemeToggle } from './Hud';
 import { ShareDialog } from './ShareDialog';
+import { Splitter, useBoardShare } from './Splitter';
 import { LazyField } from './LazyField';
 import { PlaceItem } from './PlaceItem';
 import { PreviewCard } from './PreviewCard';
@@ -76,7 +78,11 @@ function usePlaceDetails(provider: MapsProvider, placeIds: string[]) {
 
 export function TripView({ trip, provider, suggest, scorer, onChange, me }: Props) {
   const [sharing, setSharing] = useState(false);
-  const [step, setStep] = useState<Step>('places');
+  const [checking, setChecking] = useState(false);
+  // A trip with days opens on its schedule; a new one starts by choosing places.
+  const [step, setStep] = useState<Step>(trip.days.length > 0 ? 'days' : 'places');
+  const workspace = useRef<HTMLDivElement>(null);
+  const [boardShare, setBoardShare] = useBoardShare();
   // A trip through several cities opens on all of them, which is how an imported itinerary reads best.
   const [tab, setTab] = useState(trip.cities.length === 1 ? trip.cities[0].id : ALL);
   const [focus, setFocus] = useState(ALL);
@@ -124,6 +130,8 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
 
   // Only the open city is looked up, which keeps a large trip well inside the free allowance.
   const details = usePlaceDetails(provider, [...new Set(cityPlaces.filter((p) => !isEntry(p)).map((p) => p.placeId))]);
+  // Checking places covers the whole trip, whichever city tab is open.
+  const allDetails = usePlaceDetails(provider, checking ? [...new Set(trip.places.filter((p) => !isEntry(p)).map((p) => p.placeId))] : []);
 
   const scoringMessage = useScoring({
     scorer,
@@ -430,7 +438,11 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
         </div>
       </div>
 
-      <div className={['workspace', step === 'days' && 'days', preview && 'previewing'].filter(Boolean).join(' ')}>
+      <div
+        ref={workspace}
+        className={['workspace', step === 'days' && 'days', preview && 'previewing'].filter(Boolean).join(' ')}
+        style={{ '--board-fr': `${boardShare}fr`, '--map-fr': `${1 - boardShare}fr` } as CSSProperties}
+      >
         {step === 'places' ? placesPanel : (
           <DayBoard
             trip={trip}
@@ -456,8 +468,10 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onAddDay={onAddDay}
             onEditDay={setEditingDayId}
             onAutoGroup={() => setAutoGrouping(true)}
+            onCheckPlaces={() => setChecking(true)}
           />
         )}
+        {step === 'days' && <Splitter container={workspace} value={boardShare} onChange={setBoardShare} />}
 
         <div className="map-pane hud-frame">
           <MapView
@@ -621,6 +635,24 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
           ready={!pinnable.some((p) => details[p.placeId] === undefined)}
           onApply={applyAutoGroup}
           onClose={() => setAutoGrouping(false)}
+        />
+      )}
+
+      {checking && (
+        <CheckPlacesDialog
+          trip={trip}
+          provider={provider}
+          details={allDetails}
+          onUpdate={update}
+          onShow={(id) => {
+            setChecking(false);
+            setTab(ALL);
+            setFocus(ALL);
+            setPreview(null);
+            setStep('days');
+            setSelectedId(id);
+          }}
+          onClose={() => setChecking(false)}
         />
       )}
 

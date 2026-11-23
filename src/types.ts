@@ -30,6 +30,10 @@ export type SavedPlace = {
   mustHave?: boolean;
   /** A hotel or other place to stay: always on the map, and not something to schedule. */
   homeBase?: boolean;
+  /** Where it happens, as an imported itinerary wrote it, kept to help find it on the map. */
+  where?: string;
+  /** Checked and isn't somewhere to pin, so it's no longer offered for a pin. */
+  noPin?: boolean;
   /** Set once by Gemini in the background, and redone only when the rubric version changes. */
   scores?: PlaceScores;
   notes: string;
