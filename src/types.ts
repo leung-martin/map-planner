@@ -18,7 +18,12 @@ export type Day = {
 
 export type SavedPlace = {
   id: string;
+  /** Empty for a plan with no map pin, like "Breakfast" or a flight, which uses `title` instead. */
   placeId: string;
+  title?: string;
+  /** 24-hour "HH:MM". */
+  time?: string;
+  endTime?: string;
   cityId: string;
   dayId: string | null;
   /** Missing on places saved before stars existed. */
@@ -46,6 +51,10 @@ export type Trip = {
   days: Day[];
   places: SavedPlace[];
   updatedAt: number;
+  /** Set when synced. Only these Google accounts, owner included, can open the trip. */
+  ownerUid?: string;
+  ownerEmail?: string;
+  memberEmails?: string[];
 };
 
 export type LatLng = { lat: number; lng: number };

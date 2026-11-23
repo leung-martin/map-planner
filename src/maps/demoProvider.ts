@@ -35,6 +35,8 @@ function details([placeId, name, area, city, lat, lng]: Row): PlaceDetails {
     placeId,
     name,
     shortLocation: `${area}, ${CITIES[city].name}`,
+    city: CITIES[city].name,
+    types: ['tourist_attraction'],
     location: { lat, lng },
     photo: {
       url: () =>
@@ -89,6 +91,11 @@ export const demoProvider: MapsProvider = {
 
   async matchPlace(name) {
     return DEMO_PLACES.find((row) => matches(row[1], name) || matches(name, row[1]))?.[0] ?? null;
+  },
+
+  async findPlace(query) {
+    const city = Object.keys(CITIES).find((id) => matches(CITIES[id].name, query));
+    return city ?? (await demoProvider.matchPlace(query, { lat: 0, lng: 0 }));
   },
 
   async getPlace(placeId) {

@@ -1,9 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each signed-in account can reach only its own trips.
+    // Trips from before sharing existed. The app moves them to /trips and then deletes them here.
     match /users/{uid}/trips/{tripId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // A trip is open only to the Google accounts on its member list. Only its owner can change that list,
+    // though anyone on it can take themselves off.
+    match /trips/{tripId} {
+      function me() {
+        return request.auth.token.email.lower();
+      }
+      function signedIn() {
+        return request.auth != null && request.auth.token.email_verified == true;
+      }
+      function isOwner() {
+        return request.auth.uid == resource.data.ownerUid;
+      }
+      function members(data) {
+        return me() in data.memberEmails;
+      }
+
+      allow read: if signedIn() && members(resource.data);
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && members(request.resource.data);
+      allow update: if signedIn() && members(resource.data)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && (
+          (isOwner() && members(request.resource.data))
+          || request.resource.data.memberEmails == resource.data.memberEmails
+          || request.resource.data.memberEmails == resource.data.memberEmails.removeAll([me()])
+        );
+      allow delete: if signedIn() && isOwner();
     }
   }
 }

@@ -1,5 +1,5 @@
 import { googleMapsApiKey } from '../config';
-import { shortLocation } from '../trip';
+import { cityOf, shortLocation } from '../trip';
 import type { Bounds } from '../types';
 import { GoogleMapView } from './GoogleMapView';
 import type { MapsProvider, PlaceDetails, Suggestion } from './provider';
@@ -31,17 +31,18 @@ async function placesLibrary() {
 }
 
 // Name makes this a Pro-tier lookup; the photo is billed only when its image loads.
-const DETAIL_FIELDS = ['displayName', 'addressComponents', 'location', 'photos'];
+const DETAIL_FIELDS = ['displayName', 'addressComponents', 'location', 'photos', 'types'];
 
 function toDetails(place: google.maps.places.Place): PlaceDetails {
   // Google's first photo is the one that best shows the place, even when it's a tall one.
   const photo = place.photos?.[0];
+  const parts = (place.addressComponents ?? []).map((part) => ({ longText: part.longText, types: part.types }));
   return {
     placeId: place.id,
     name: place.displayName ?? 'Unnamed place',
-    shortLocation: shortLocation(
-      (place.addressComponents ?? []).map((part) => ({ longText: part.longText, types: part.types })),
-    ),
+    shortLocation: shortLocation(parts),
+    city: cityOf(parts),
+    types: place.types ?? [],
     location: { lat: place.location!.lat(), lng: place.location!.lng() },
     photo: photo
       ? {
@@ -124,6 +125,18 @@ export function createGoogleProvider(): MapsProvider {
           maxResultCount: 1,
           // Google rejects a restriction box covering most of the globe, as a fully zoomed-out map would.
           ...(within && lngSpan(within) < 180 ? { locationRestriction: within } : { locationBias: { center: near, radius: 500 } }),
+        });
+        return places[0]?.id ?? null;
+      }),
+
+    findPlace: (textQuery, near) =>
+      limit(async () => {
+        const { Place } = await placesLibrary();
+        const { places } = await Place.searchByText({
+          textQuery,
+          fields: ['id'],
+          maxResultCount: 1,
+          ...(near ? { locationBias: { center: near, radius: 50_000 } } : {}),
         });
         return places[0]?.id ?? null;
       }),

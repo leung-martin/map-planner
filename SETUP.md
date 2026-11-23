@@ -36,9 +36,11 @@ Copy `.env.example` to `.env.local` and fill it in. `.env.local` is ignored by g
 | `VITE_GOOGLE_MAPS_API_KEY` | The key from step 1 |
 | `VITE_GOOGLE_MAPS_MAP_ID` | Optional Map ID from step 1 |
 | `VITE_FIREBASE_API_KEY` | `apiKey` in the Firebase config |
-| `VITE_FIREBASE_AUTH_DOMAIN` | `authDomain` |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `YOUR-FIREBASE-PROJECT.web.app`, not the `authDomain` in the config (see below) |
 | `VITE_FIREBASE_PROJECT_ID` | `projectId` |
 | `VITE_FIREBASE_APP_ID` | `appId` |
+
+Sign-in runs through the app's own address, because phone browsers like Chrome on Android block it when it goes through `firebaseapp.com`. For Google to allow this, open [Google Cloud credentials](https://console.cloud.google.com/apis/credentials), open **Web client (auto created by Google Service)**, and add `https://YOUR-FIREBASE-PROJECT.web.app/__/auth/handler` under **Authorized redirect URIs**.
 
 ## 4. Publish it
 

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, SquareDashedMousePointer, Upload, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, SquareDashedMousePointer, Upload, Users, X } from 'lucide-react';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { groupByLocation } from '../autoGroup';
@@ -9,7 +9,7 @@ import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
 import { useScoring } from '../useScoring';
 import {
-  addCity, addDay, addPlace, addPlaces, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, updatePlace,
+  addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { AutoGroupDialog } from './AutoGroupDialog';
@@ -17,6 +17,7 @@ import { BoxSelectLayer } from './BoxSelectLayer';
 import { DayBoard } from './DayBoard';
 import { DayDialog } from './DayDialog';
 import { SettingsMenu, ThemeToggle } from './Hud';
+import { ShareDialog } from './ShareDialog';
 import { LazyField } from './LazyField';
 import { PlaceItem } from './PlaceItem';
 import { PreviewCard } from './PreviewCard';
@@ -30,6 +31,8 @@ type Props = {
   suggest: Suggester | null;
   scorer: Scorer | null;
   onChange(trip: Trip): void;
+  /** The signed-in account, when trips sync and can be shared. */
+  me: { uid: string; email: string } | null;
 };
 
 type Preview = { details: PlaceDetails; fromSearch: boolean };
@@ -71,9 +74,11 @@ function usePlaceDetails(provider: MapsProvider, placeIds: string[]) {
   return byId;
 }
 
-export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
+export function TripView({ trip, provider, suggest, scorer, onChange, me }: Props) {
+  const [sharing, setSharing] = useState(false);
   const [step, setStep] = useState<Step>('places');
-  const [tab, setTab] = useState(trip.cities[0]?.id ?? ALL);
+  // A trip through several cities opens on all of them, which is how an imported itinerary reads best.
+  const [tab, setTab] = useState(trip.cities.length === 1 ? trip.cities[0].id : ALL);
   const [focus, setFocus] = useState(ALL);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -118,7 +123,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   const days = city ? trip.days.filter((d) => d.cityIds.includes(city.id)) : trip.days;
 
   // Only the open city is looked up, which keeps a large trip well inside the free allowance.
-  const details = usePlaceDetails(provider, [...new Set(cityPlaces.map((p) => p.placeId))]);
+  const details = usePlaceDetails(provider, [...new Set(cityPlaces.filter((p) => !isEntry(p)).map((p) => p.placeId))]);
 
   const scoringMessage = useScoring({
     scorer,
@@ -165,7 +170,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
     return result;
   }, [shown, details, trip, selectedId, preview, boxIds]);
 
-  const pending = shown.some((p) => details[p.placeId] === undefined);
+  const pending = shown.some((p) => !isEntry(p) && details[p.placeId] === undefined);
   const fitKey = [
     // The map is narrower in Plan days, so each step needs its own framing.
     step, activeTab, activeFocus, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
@@ -235,9 +240,11 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
   };
 
   // A home base is where the days start from, so it isn't one of the places to fit into them.
-  const homeBases = cityPlaces.filter((p) => p.homeBase);
-  const mustHaves = cityPlaces.filter((p) => p.mustHave && !p.homeBase);
-  const maybes = cityPlaces.filter((p) => !p.mustHave && !p.homeBase);
+  // Plans without a pin belong to days, so they're left out of choosing places.
+  const pinnable = cityPlaces.filter((p) => !isEntry(p));
+  const homeBases = pinnable.filter((p) => p.homeBase);
+  const mustHaves = pinnable.filter((p) => p.mustHave && !p.homeBase);
+  const maybes = pinnable.filter((p) => !p.mustHave && !p.homeBase);
 
   const applyAutoGroup = (dayCount: number, includeMaybes: boolean) => {
     if (!city) return;
@@ -351,7 +358,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             <ul>{maybes.map(placeItem)}</ul>
           </section>
         )}
-        {hasCities && cityPlaces.length === 0 && (
+        {hasCities && pinnable.length === 0 && (
           <p className="muted empty">Search on the map, tap a place, or get some suggestions.</p>
         )}
         {city && (
@@ -389,6 +396,12 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
           value={trip.name}
           onCommit={(name) => name.trim() && update((current) => ({ ...current, name: name.trim() }))}
         />
+        {me && (
+          <button className="icon-button" title="Share this trip" aria-label="Share this trip" onClick={() => setSharing(true)}>
+            <Users size={22} aria-hidden="true" />
+            {(trip.memberEmails?.length ?? 1) > 1 && <span className="share-count">{trip.memberEmails!.length}</span>}
+          </button>
+        )}
         <ThemeToggle />
       </header>
 
@@ -434,6 +447,11 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
             onMoveDay={(dayId, targetId) => update((current) => moveDayOnto(current, dayId, targetId))}
             onChangePlace={(id, patch) => update((current) => updatePlace(current, id, patch))}
             onNewDayFor={(place) => update((current) => assignToNewDay(current, [place.id], place.cityId))}
+            onAddPlan={(day, title) => update((current) => addEntry(current, { title, cityId: city && day.cityIds.includes(city.id) ? city.id : day.cityIds[0], dayId: day.id }))}
+            onRemove={(id) => {
+              update((current) => removePlace(current, id));
+              setSelectedId(null);
+            }}
             onFocus={(key) => setFocus(activeFocus === key ? ALL : key)}
             onAddDay={onAddDay}
             onEditDay={setEditingDayId}
@@ -600,10 +618,14 @@ export function TripView({ trip, provider, suggest, scorer, onChange }: Props) {
           mustHaves={mustHaves.length}
           maybes={maybes.length}
           defaultDays={days.length || Math.max(1, Math.ceil((mustHaves.length || maybes.length) / PLACES_PER_DAY))}
-          ready={!cityPlaces.some((p) => details[p.placeId] === undefined)}
+          ready={!pinnable.some((p) => details[p.placeId] === undefined)}
           onApply={applyAutoGroup}
           onClose={() => setAutoGrouping(false)}
         />
+      )}
+
+      {sharing && me && (
+        <ShareDialog trip={trip} me={me} onUpdate={update} onClose={() => setSharing(false)} />
       )}
 
       {editingDay && (

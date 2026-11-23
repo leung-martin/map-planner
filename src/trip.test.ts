@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addCity, addDay, addPlace, addPlaces, assignableDays, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, moveDayOnto,
+  addCity, addDay, addPlace, addPlaces, assignableDays, cityOf, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, moveDayOnto,
   movePlaceBeside, movePlaceToEnd, removeCity, removeDay, shortLocation, tripNameFor, updateDay,
 } from './trip';
 import type { Trip } from './types';
@@ -191,6 +191,19 @@ describe('shortLocation', () => {
   });
   it('ignores a neighborhood that is only a number', () => {
     expect(shortLocation([part('3', 'neighborhood'), part('Minato City', 'locality')])).toBe('Minato City');
+  });
+});
+
+describe('cityOf', () => {
+  const part = (longText: string, ...types: string[]) => ({ longText, types });
+  it('treats a Tokyo ward as Tokyo, and uses the locality elsewhere', () => {
+    expect(cityOf([part('Minato City', 'locality'), part('Tokyo', 'administrative_area_level_1')])).toBe('Tokyo');
+    expect(cityOf([part('Sapporo', 'locality'), part('Hokkaido', 'administrative_area_level_1')])).toBe('Sapporo');
+    expect(cityOf([part('Hachioji', 'locality'), part('Tokyo', 'administrative_area_level_1')])).toBe('Hachioji');
+    expect(cityOf([part('Kutchan', 'administrative_area_level_2'), part('Hokkaido', 'administrative_area_level_1')])).toBe('Kutchan');
+    expect(cityOf([part('Shibuya', 'locality'), part('Tokyo', 'administrative_area_level_1')])).toBe('Tokyo');
+    expect(cityOf([part('Chūō City', 'locality'), part('Tokyo', 'administrative_area_level_1')])).toBe('Tokyo');
+    expect(cityOf([part('Japan', 'country')])).toBe('');
   });
 });
 

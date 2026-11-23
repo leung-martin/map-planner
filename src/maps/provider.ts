@@ -11,6 +11,9 @@ export type PlaceDetails = {
   placeId: string;
   name: string;
   shortLocation: string;
+  /** The city it's in, such as "Tokyo" for any of Tokyo's wards. */
+  city: string;
+  types: string[];
   location: LatLng;
   photo: PlacePhoto | null;
 };
@@ -56,6 +59,8 @@ export interface MapsProvider {
   searchPlaces(query: string, near: Bounds | null): Promise<Suggestion[]>;
   /** Finds the place ID for a named pin, looking only inside `within` when it's given. */
   matchPlace(name: string, near: LatLng, within?: Bounds): Promise<string | null>;
+  /** Finds the place ID for a name anywhere, preferring results near `near`. */
+  findPlace(query: string, near: LatLng | null): Promise<string | null>;
   getPlace(placeId: string): Promise<PlaceDetails>;
   getCityBounds(placeId: string): Promise<Bounds | null>;
 }

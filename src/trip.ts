@@ -111,6 +111,39 @@ export function assignGroups(trip: Trip, cityId: string, groups: string[][]): Tr
   return { ...result, places: result.places.map((place) => (dayOf.has(place.id) ? { ...place, dayId: dayOf.get(place.id)! } : place)) };
 }
 
+/** Everyone who can open the trip. A trip never shared lists only its owner. */
+export function membersOf(trip: Trip, myEmail: string): string[] {
+  return trip.memberEmails?.length ? trip.memberEmails : [myEmail.toLowerCase()];
+}
+
+/** A plan with no map pin, such as "Breakfast" or a flight. */
+export const isEntry = (place: SavedPlace) => !place.placeId;
+
+export function addEntry(trip: Trip, entry: { title: string; cityId: string; dayId: string | null }): Trip {
+  return { ...trip, places: [...trip.places, { ...entry, id: newId(), placeId: '', notes: '' }] };
+}
+
+/**
+ * A day's places in the order shown: timed ones in time order, untimed ones where they were dragged.
+ * Timed places fill the slots timed places already hold, so dragging an untimed one still places it.
+ */
+export function inDayOrder(places: SavedPlace[]): SavedPlace[] {
+  const timed = places.filter((p) => p.time).sort((a, b) => a.time!.localeCompare(b.time!));
+  let next = 0;
+  return places.map((p) => (p.time ? timed[next++] : p));
+}
+
+/** "8:30 PM" from "20:30", in the device's own clock style. */
+export function formatTime(time: string): string {
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+export function timeRange(place: SavedPlace): string {
+  if (!place.time) return place.endTime ? `Until ${formatTime(place.endTime)}` : '';
+  return place.endTime ? `${formatTime(place.time)} – ${formatTime(place.endTime)}` : formatTime(place.time);
+}
+
 export function updatePlace(trip: Trip, id: string, patch: Partial<Omit<SavedPlace, 'id'>>): Trip {
   return { ...trip, places: trip.places.map((place) => (place.id === id ? { ...place, ...patch } : place)) };
 }
@@ -171,6 +204,24 @@ export function googleMapsUrl(placeId: string, name: string): string {
 }
 
 type AddressPart = { longText: string | null; types: string[] };
+
+const TOKYO_WARDS = new Set([
+  'chiyoda', 'chuo', 'minato', 'shinjuku', 'bunkyo', 'taito', 'sumida', 'koto', 'shinagawa', 'meguro', 'ota', 'setagaya',
+  'shibuya', 'nakano', 'suginami', 'toshima', 'kita', 'arakawa', 'itabashi', 'nerima', 'adachi', 'katsushika', 'edogawa',
+]);
+
+/**
+ * The city a place belongs to, or '' for a place in no city, such as a bay.
+ * Tokyo's 23 wards are each listed as a city, so they count as Tokyo.
+ */
+export function cityOf(parts: AddressPart[]): string {
+  const find = (type: string) => parts.find((part) => part.types.includes(type))?.longText ?? null;
+  const region = find('administrative_area_level_1');
+  const locality = find('locality');
+  const ward = locality?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/( city|-ku| ward)$/, '');
+  if (region === 'Tokyo' && ward && TOKYO_WARDS.has(ward)) return 'Tokyo';
+  return locality ?? find('postal_town') ?? find('administrative_area_level_2') ?? '';
+}
 
 /** "Le Marais, Paris": no street-level detail. */
 export function shortLocation(parts: AddressPart[]): string {

@@ -29,7 +29,7 @@ type Backend = typeof import('./data/firebase');
 type Session =
   | { status: 'loading' }
   | { status: 'signedOut'; backend: Backend }
-  | { status: 'ready'; store: TripStore; backend: Backend | null };
+  | { status: 'ready'; store: TripStore; backend: Backend | null; me: { uid: string; email: string } | null };
 
 const goHome = () => {
   window.location.hash = '#/';
@@ -49,7 +49,7 @@ function useSession(): Session {
   const [session, setSession] = useState<Session>({ status: 'loading' });
   useEffect(() => {
     if (!hasFirebase) {
-      setSession({ status: 'ready', store: createLocalStore(), backend: null });
+      setSession({ status: 'ready', store: createLocalStore(), backend: null, me: null });
       return;
     }
     let stop = () => {};
@@ -59,7 +59,10 @@ function useSession(): Session {
       stop = backend.watchUser((user) =>
         setSession(
           user
-            ? { status: 'ready', store: backend.createFirebaseStore(user.uid), backend }
+            ? (() => {
+                const me = { uid: user.uid, email: (user.email ?? '').toLowerCase() };
+                return { status: 'ready', store: backend.createFirebaseStore(me), backend, me } as const;
+              })()
             : { status: 'signedOut', backend },
         ),
       );
@@ -130,6 +133,13 @@ export function App() {
     storeRef.current?.remove(tripId).catch((reason: Error) => setError(`Could not delete: ${reason.message}`));
   };
 
+  const me = session.me;
+  // Someone the trip was shared with takes themselves off the list rather than deleting it for everyone.
+  const leave = (trip: Trip) => {
+    if (!me) return;
+    save({ ...trip, memberEmails: (trip.memberEmails ?? []).filter((email) => email !== me.email) });
+  };
+
   const tripId = hash.match(/^#\/trip\/(.+)$/)?.[1];
   const trip = trips?.find((t) => t.id === tripId);
   const banner = error && (
@@ -162,7 +172,7 @@ export function App() {
       <>
         <Backdrop />
         {banner}
-        <TripView key={trip.id} trip={trip} provider={provider} suggest={suggest} scorer={scorer} onChange={save} />
+        <TripView key={trip.id} trip={trip} provider={provider} suggest={suggest} scorer={scorer} onChange={save} me={me} />
       </>
     );
   }
@@ -177,6 +187,10 @@ export function App() {
         demo={provider.demo}
         synced={hasFirebase}
         onDelete={remove}
+        onLeave={leave}
+        myUid={me?.uid ?? null}
+        provider={provider}
+        onImport={(imported) => imported.forEach(save)}
         onSignOut={session.backend ? session.backend.signOut : null}
       />
     </>

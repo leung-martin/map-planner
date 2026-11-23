@@ -1,9 +1,10 @@
-import { House, LayoutGrid, Pencil, Plus } from 'lucide-react';
-import { useState, type DragEvent } from 'react';
+import { House, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useState, type DragEvent, type FormEvent } from 'react';
 import type { PlaceDetails } from '../maps/provider';
-import { dayColor, dayNumber, dayRoute, googleMapsUrl } from '../trip';
+import { dayColor, dayNumber, dayRoute, googleMapsUrl, inDayOrder, isEntry, timeRange } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
 import { MapsLink } from './Hud';
+import { LazyField } from './LazyField';
 import { PlaceOptions } from './PlaceOptions';
 import { ScoreStack, ScoreTotal } from './Scores';
 
@@ -22,6 +23,8 @@ type Props = {
   onMoveDay(dayId: string, targetId: string): void;
   onChangePlace(placeId: string, patch: Partial<SavedPlace>): void;
   onNewDayFor(place: SavedPlace): void;
+  onAddPlan(day: Day, title: string): void;
+  onRemove(placeId: string): void;
   onFocus(key: string): void;
   onAddDay(): void;
   onEditDay(dayId: string): void;
@@ -30,12 +33,28 @@ type Props = {
 
 const starredFirst = (a: SavedPlace, b: SavedPlace) => Number(Boolean(b.mustHave)) - Number(Boolean(a.mustHave));
 
+/** A one-line box at the bottom of a day for adding a plan that has no map pin. */
+function AddPlan({ onAdd }: { onAdd(title: string): void }) {
+  const [title, setTitle] = useState('');
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!title.trim()) return;
+    onAdd(title.trim());
+    setTitle('');
+  };
+  return (
+    <form className="add-plan" onSubmit={submit}>
+      <input value={title} placeholder="+ Add a plan" aria-label="Add a plan to this day" onChange={(event) => setTitle(event.target.value)} />
+    </form>
+  );
+}
+
 const formatDate = (date: string) =>
   new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onFocus, onAddDay, onEditDay, onAutoGroup,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [draggingDayId, setDraggingDayId] = useState<string | null>(null);
@@ -54,6 +73,7 @@ export function DayBoard({
   const accepts = (place: SavedPlace | undefined, day: Day) => !place || day.cityIds.includes(place.cityId);
 
   const nameOf = (place: SavedPlace) => {
+    if (isEntry(place)) return place.title || 'Plan';
     const info = details[place.placeId];
     return info && info !== 'error' ? info.name : info === 'error' ? 'Saved place' : 'Loading…';
   };
@@ -87,7 +107,7 @@ export function DayBoard({
         }}
       >
         <button
-          className={['card', place.id === selectedId && 'selected', !place.mustHave && 'maybe'].filter(Boolean).join(' ')}
+          className={['card', place.id === selectedId && 'selected', isEntry(place) ? 'entry' : !place.mustHave && 'maybe'].filter(Boolean).join(' ')}
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData('text/plain', place.id);
@@ -98,13 +118,15 @@ export function DayBoard({
           onClick={() => onSelect(place.id === selectedId ? null : place.id)}
         >
           <span className="card-text">
+            {(place.time || place.endTime) && <span className="card-time">{timeRange(place)}</span>}
             <span className="card-name">
               {place.homeBase
                 ? <span className="card-star" title="Home base"><House size={15} aria-hidden="true" /> </span>
                 : place.mustHave && <span className="card-star" aria-label="Must-have">★ </span>}
               {nameOf(place)}
             </span>
-            <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>
+            {!isEntry(place) && <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>}
+            {place.notes && <span className="card-note small">{place.notes}</span>}
             {place.scores && <ScoreTotal scores={place.scores} />}
           </span>
           {place.scores && <ScoreStack scores={place.scores} />}
@@ -160,7 +182,7 @@ export function DayBoard({
 
         {days.map((day) => {
           const number = dayNumber(trip, day.id);
-          const dayPlaces = places.filter((place) => place.dayId === day.id);
+          const dayPlaces = inDayOrder(places.filter((place) => place.dayId === day.id));
           const allowed = draggingDayId !== null || accepts(dragging ?? selected, day);
           return (
             <div key={day.id} className={columnClass(day.id, allowed)} data-day={number} {...dropProps(day.id, day.id, allowed)}>
@@ -186,6 +208,7 @@ export function DayBoard({
                 </button>
               </h3>
               <ul className="column-list">{dayPlaces.map(card)}</ul>
+              <AddPlan onAdd={(title) => onAddPlan(day, title)} />
             </div>
           );
         })}
@@ -195,13 +218,42 @@ export function DayBoard({
 
       {selected && (
         <div className="move-bar">
-          <span className="move-name clip">{nameOf(selected)}</span>
-          <MapsLink href={googleMapsUrl(selected.placeId, nameOf(selected))} name={nameOf(selected)} />
+          {isEntry(selected) ? (
+            <LazyField
+              key={selected.id}
+              className="move-name"
+              label="Plan"
+              value={selected.title ?? ''}
+              onCommit={(title) => title.trim() && onChangePlace(selected.id, { title: title.trim() })}
+            />
+          ) : (
+            <>
+              <span className="move-name clip">{nameOf(selected)}</span>
+              <MapsLink href={googleMapsUrl(selected.placeId, nameOf(selected))} name={nameOf(selected)} />
+            </>
+          )}
+          <button
+            className="icon-button danger"
+            title="Remove from trip"
+            aria-label={`Remove ${nameOf(selected)} from trip`}
+            onClick={() => window.confirm(`Remove “${nameOf(selected)}” from this trip?`) && onRemove(selected.id)}
+          >
+            <Trash2 size={20} aria-hidden="true" />
+          </button>
           <PlaceOptions
             trip={trip}
             place={selected}
             onChange={(patch) => onChangePlace(selected.id, patch)}
             onNewDay={() => onNewDayFor(selected)}
+          />
+          <LazyField
+            key={`note-${selected.id}`}
+            className="move-note"
+            label="Note"
+            placeholder="Add a note"
+            multiline
+            value={selected.notes}
+            onCommit={(notes) => onChangePlace(selected.id, { notes })}
           />
         </div>
       )}

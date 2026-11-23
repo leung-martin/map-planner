@@ -23,7 +23,8 @@ export default defineConfig({
         ],
       },
       // Only the app's own files are cached. Google Maps content must not be.
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+      // Firebase's own pages under /__/ (sign-in among them) must always come from the server, never the app shell.
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'], navigateFallbackDenylist: [/^\/__\//] },
     }),
   ],
 });
