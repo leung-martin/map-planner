@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, House, MapPinned, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, House, MapPin, MapPinned, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { PlaceDetails } from '../maps/provider';
@@ -33,6 +33,8 @@ type Props = {
   onCheckPlaces(): void;
   /** The days showing on the board, as it scrolls. */
   onDaysInView(dayIds: string[]): void;
+  /** The pinned place a plan happens at, if it's one already on the map. */
+  spotOf(place: SavedPlace): SavedPlace | null;
 };
 
 const starredFirst = (a: SavedPlace, b: SavedPlace) => Number(Boolean(b.mustHave)) - Number(Boolean(a.mustHave));
@@ -58,7 +60,7 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -397,6 +399,18 @@ export function DayBoard({
               <X size={20} aria-hidden="true" />
             </button>
           </div>
+          {(() => {
+            const spot = isEntry(selected) ? spotOf(selected) : null;
+            const info = spot ? details[spot.placeId] : undefined;
+            if (!spot || !info || info === 'error') return null;
+            return (
+              <div className="card-editor-spot">
+                <MapPin size={16} aria-hidden="true" />
+                <span className="clip grow">At <b>{info.name}</b></span>
+                <MapsLink href={googleMapsUrl(spot.placeId, info.name)} name={info.name} />
+              </div>
+            );
+          })()}
           <PlaceOptions
             trip={trip}
             place={selected}

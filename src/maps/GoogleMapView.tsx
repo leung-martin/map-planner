@@ -160,7 +160,12 @@ export function GoogleMapView({ pins, fitKey, fallback, fitIds, popout, onPinCli
   const highlighted = pins.filter((pin) => pin.selected);
   const selected = highlighted.length === 1 ? highlighted[0] : undefined;
   useEffect(() => {
-    if (selected) map.current?.panTo(selected.location);
+    if (!selected || !map.current) return;
+    // Close in: about 500 m around the place, whatever shape the map is.
+    const { lat, lng } = selected.location;
+    const dLat = 0.5 / 111;
+    const dLng = dLat / Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+    map.current.fitBounds({ north: lat + dLat, south: lat - dLat, east: lng + dLng, west: lng - dLng }, 0);
   }, [selected?.id, selected?.placeId]);
 
   return (

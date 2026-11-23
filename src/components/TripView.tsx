@@ -12,6 +12,7 @@ import {
   addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
+import { checkPlace } from '../checkPlaces';
 import { AutoGroupDialog } from './AutoGroupDialog';
 import { CheckPlacesDialog } from './CheckPlacesDialog';
 import { BoxSelectLayer } from './BoxSelectLayer';
@@ -155,6 +156,20 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
     [cityPlaces, activeFocus],
   );
 
+  // A plan without a pin that happens at a pinned place, like breakfast at the hotel, shows that place.
+  const names = useMemo(() => {
+    const result: Record<string, string> = {};
+    for (const [id, info] of Object.entries(details)) if (info !== 'error') result[id] = info.name;
+    return result;
+  }, [details]);
+  const spotOf = (place: SavedPlace): SavedPlace | null => {
+    if (!isEntry(place)) return null;
+    const check = checkPlace(place, trip, names);
+    return check.status === 'same-spot' ? check.at : null;
+  };
+  const selectedPlace = trip.places.find((p) => p.id === selectedId);
+  const selectedSpotId = selectedPlace ? spotOf(selectedPlace)?.id ?? null : null;
+
   const pins = useMemo(() => {
     const result: MapPin[] = [];
     for (const place of shown) {
@@ -169,7 +184,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
         label: place.homeBase ? '' : day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
         home: place.homeBase,
         title: info.name,
-        selected: (place.id === selectedId && !preview) || boxIds.includes(place.id),
+        selected: ((place.id === selectedId || place.id === selectedSpotId) && !preview) || boxIds.includes(place.id),
       });
     }
     if (preview) {
@@ -184,7 +199,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
       });
     }
     return result;
-  }, [shown, details, trip, selectedId, preview, boxIds]);
+  }, [shown, details, trip, selectedId, selectedSpotId, preview, boxIds]);
 
   const pending = shown.some((p) => !isEntry(p) && details[p.placeId] === undefined);
   // In the schedule the map frames the days showing on the board, or all of them when one is in focus.
@@ -505,6 +520,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onAutoGroup={() => setAutoGrouping(true)}
             onCheckPlaces={() => setChecking(true)}
             onDaysInView={setDaysInView}
+            spotOf={spotOf}
           />
         )}
         {step === 'days' && <Splitter container={workspace} value={mapShare} onChange={setMapShare} />}
