@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPlace, notesWithTitle } from './checkPlaces';
+import { checkPlace, notesWithTitle, rewriteWhere, travelTo } from './checkPlaces';
 import type { SavedPlace, Trip } from './types';
 
 const item = (patch: Partial<SavedPlace>): SavedPlace => ({ id: 'x', placeId: '', cityId: 'c', dayId: null, notes: '', ...patch });
@@ -65,5 +65,40 @@ describe('notesWithTitle', () => {
     expect(notesWithTitle(item({ title: 'Dinner', notes: 'Cash only' }))).toBe('Dinner\nCash only');
     expect(notesWithTitle(item({ title: 'Dinner', notes: 'Dinner\nCash only' }))).toBe('Dinner\nCash only');
     expect(notesWithTitle(item({ title: 'Dinner' }))).toBe('Dinner');
+  });
+});
+
+describe('a place picked by hand', () => {
+  it('links a plan to that pin whatever its wording says', () => {
+    const plan = item({ title: 'Back to hotel and rest', where: 'Hotel Minh (Tokyo)', spotId: 'h' });
+    expect(checkPlace(plan, trip, names)).toEqual({ status: 'same-spot', at: hotel });
+  });
+  it('falls back to matching by name when the pin is gone', () => {
+    const plan = item({ title: 'Back to hotel and rest', where: 'Vessel Inn Sapporo', spotId: 'gone' });
+    expect(checkPlace(plan, trip, names)).toEqual({ status: 'same-spot', at: hotel });
+  });
+});
+
+describe('rewriteWhere', () => {
+  it('fixes the place in the notes too, or drops it once the card shows the linked place', () => {
+    const plan = item({ title: 'Sleep', notes: 'Hotel Minh (Tokyo)\nCost: 0' });
+    expect(rewriteWhere(plan, 'Hotel Minn Shinagawa', true)).toMatchObject({ where: 'Hotel Minn Shinagawa', notes: 'Hotel Minn Shinagawa\nCost: 0' });
+    expect(rewriteWhere(plan, 'Minn Shinagawa East', false)).toMatchObject({ where: 'Minn Shinagawa East', notes: 'Cost: 0' });
+    expect(rewriteWhere(item({ notes: 'Bring cash' , where: 'Otaru' }), 'Otaru Canal', true).notes).toBe('Bring cash');
+  });
+});
+
+describe('travelTo', () => {
+  const airport = item({ id: 'a', placeId: 'hnd', cityId: 'tokyo' });
+  const pearson = item({ id: 'p', placeId: 'yyz', cityId: 'c' });
+  const withAirports: Trip = { ...trip, cities: [...trip.cities, { id: 'tokyo', placeId: 'tk', name: 'Tokyo' }], places: [hotel, airport, pearson] };
+  const airportNames = { ...names, hnd: 'Haneda Airport', yyz: 'Toronto Pearson International Airport' };
+  it('finds the pinned place at the end of the arrow, however far away', () => {
+    expect(travelTo(item({ title: 'Flight: Toronto -> Haneda', where: 'YYZ -> HND' }), withAirports, airportNames)).toBe(airport);
+    expect(travelTo(item({ title: 'Flight home', where: 'HND -> YYZ' }), withAirports, airportNames)).toBe(pearson);
+  });
+  it('ignores a city at the end, and plans that go nowhere', () => {
+    expect(travelTo(item({ title: 'Bus to Sapporo', where: 'CTS -> Sapporo' }), withAirports, airportNames)).toBeNull();
+    expect(travelTo(item({ title: 'Wake', where: 'Sapporo' }), withAirports, airportNames)).toBeNull();
   });
 });

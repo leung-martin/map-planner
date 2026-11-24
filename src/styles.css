@@ -548,3 +548,20 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .card-missing svg { flex: none; }
 .card.unresolved { border-left: 3px dashed var(--danger); }
 .card .card-spot { color: var(--accent); }
+/* A click or drag on the board never highlights text such as dates. */
+.board .column-head, .board .card { user-select: none; -webkit-user-select: none; }
+/* Where a plan happens, in the card editor. */
+.plan-place { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--line); background: var(--row); }
+.plan-place-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.plan-place-row svg { flex: none; }
+.plan-place-row .plan-where { flex: 1; min-width: 0; }
+.plan-place-row .chip { flex: none; min-height: 34px; padding: 0 10px; }
+.plan-place-on { color: var(--accent); }
+.plan-place-missing { color: var(--danger); }
+:root[data-theme="dark"] .plan-place-missing { color: #ff9d85; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .plan-place-missing { color: #ff9d85; } }
+.plan-place-status { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; }
+.plan-place-others { display: flex; align-items: center; gap: 6px; }
+.plan-place .search-results { position: static; max-height: 220px; }
+.plan-place-others input[type="checkbox"] { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent-fill); }
+.plan-place-others span { flex: 1; min-width: 0; text-align: left; }

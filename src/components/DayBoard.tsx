@@ -1,12 +1,14 @@
-import { ChevronLeft, ChevronRight, House, MapPin, MapPinned, MapPinOff, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, House, MapPin, MapPinned, MapPinOff, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
-import type { PlaceDetails } from '../maps/provider';
+import { whereOf } from '../checkPlaces';
+import type { PlaceDetails, Suggestion } from '../maps/provider';
 import { dayColor, dayNumber, dayRoute, googleMapsUrl, inDayOrder, isEntry, timeRange } from '../trip';
 import type { Day, SavedPlace, Trip } from '../types';
 import { MapsLink } from './Hud';
 import { LazyField } from './LazyField';
 import { PlaceOptions } from './PlaceOptions';
+import { PlanPlace } from './PlanPlace';
 import { ScoreStack, ScoreTotal } from './Scores';
 
 type Props = {
@@ -37,6 +39,13 @@ type Props = {
   spotOf(place: SavedPlace): SavedPlace | null;
   /** The place a plan names that has no pin yet, if any. */
   unresolved(place: SavedPlace): string | null;
+  /** Where a flight or transfer takes them, if it lands at a pinned place. */
+  travelTo(place: SavedPlace): SavedPlace | null;
+  searchNear(place: SavedPlace, query: string): Promise<Suggestion[]>;
+  /** Rewrites where some plans happen, which matches them to pins afresh. */
+  onSetWhere(ids: string[], where: string): void;
+  /** Puts a plan, and others at the same place, at a place found on Google Maps. */
+  onPickPlace(place: SavedPlace, suggestion: Suggestion, others: string[]): void;
   /** What background scoring is doing, if anything. */
   status?: string;
 };
@@ -64,7 +73,7 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf, unresolved, status,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf, unresolved, travelTo, searchNear, onSetWhere, onPickPlace, status,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -205,7 +214,9 @@ export function DayBoard({
     const spotDetails = spot ? details[spot.placeId] : undefined;
     const spotInfo = spotDetails && spotDetails !== 'error' ? spotDetails : null;
     const scores = place.scores ?? (spot && !spot.homeBase ? spot.scores : undefined);
-    const missing = isEntry(place) && !spot ? unresolved(place) : null;
+    const goesTo = isEntry(place) && !spot ? travelTo(place) : null;
+    const goesInfo = goesTo ? details[goesTo.placeId] : undefined;
+    const missing = isEntry(place) && !spot && !goesTo ? unresolved(place) : null;
     const column = days.find((day) => day.id === place.dayId);
     const canDropBeside = Boolean(dragging && column && dragging.id !== place.id && accepts(dragging, column));
     const lowerHalf = (event: DragEvent) => {
@@ -259,6 +270,11 @@ export function DayBoard({
             {spotInfo && (
               <span className="card-location card-spot small">
                 <MapPin size={13} aria-hidden="true" /> {spotInfo.name}
+              </span>
+            )}
+            {goesInfo && goesInfo !== 'error' && (
+              <span className="card-location card-spot small" title="Where this takes you">
+                <ArrowRight size={13} aria-hidden="true" /> {goesInfo.name}
               </span>
             )}
             {missing && (
@@ -354,7 +370,7 @@ export function DayBoard({
         {days.map((day) => {
           const number = dayNumber(trip, day.id);
           const dayPlaces = inDayOrder(places.filter((place) => place.dayId === day.id));
-          const allowed = draggingDayId !== null || accepts(dragging ?? selected, day);
+          const allowed = draggingDayId !== null || accepts(dragging, day);
           return (
             <div key={day.id} className={columnClass(day.id, allowed)} data-day={number} data-day-id={day.id} {...dropProps(day.id, day.id, allowed)}>
               <h3
@@ -423,16 +439,23 @@ export function DayBoard({
               <X size={20} aria-hidden="true" />
             </button>
           </div>
-          {(() => {
-            const spot = isEntry(selected) ? spotOf(selected) : null;
+          {isEntry(selected) && (() => {
+            const spot = spotOf(selected);
             const info = spot ? details[spot.placeId] : undefined;
-            if (!spot || !info || info === 'error') return null;
+            const where = whereOf(selected).toLowerCase();
+            // Other plans written as happening at the same place, so one fix covers them all.
+            const others = where ? places.filter((p) => p.id !== selected.id && isEntry(p) && whereOf(p).toLowerCase() === where).map((p) => p.id) : [];
             return (
-              <div className="card-editor-spot">
-                <MapPin size={16} aria-hidden="true" />
-                <span className="clip grow">At <b>{info.name}</b></span>
-                <MapsLink href={googleMapsUrl(spot.placeId, info.name)} name={info.name} />
-              </div>
+              <PlanPlace
+                key={selected.id}
+                place={selected}
+                spot={spot && info && info !== 'error' ? { placeId: spot.placeId, name: info.name } : null}
+                missing={spot ? null : unresolved(selected)}
+                others={others.length}
+                search={(query) => searchNear(selected, query)}
+                onWhere={(text, alsoOthers) => onSetWhere([selected.id, ...(alsoOthers ? others : [])], text)}
+                onPick={(suggestion, alsoOthers) => onPickPlace(selected, suggestion, alsoOthers ? others : [])}
+              />
             );
           })()}
           <PlaceOptions

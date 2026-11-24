@@ -35,14 +35,14 @@ function sameSpot(a: string, b: string, cityWords: Set<string>): number {
  */
 export function checkPlace(place: SavedPlace, trip: Trip, names: Record<string, string>): Check {
   if (!isEntry(place)) return { status: 'pinned', query: place.where && searchable(place.where) ? place.where : names[place.placeId] ?? '' };
+  const linked = place.spotId ? trip.places.find((p) => p.id === place.spotId && !isEntry(p)) : undefined;
+  if (linked) return { status: 'same-spot', at: linked };
 
   const cityWords = new Set(trip.cities.flatMap((city) => simplify(city.name).split(' ')));
   // "Kawaguchiko / Tokyo" or "Sapporo" is a whole area, not a spot.
   const isArea = (text: string) => text.split(/[/,]/).some((part) => trip.cities.some((city) => simplify(city.name) === simplify(part)));
 
-  // Trips imported before `where` was kept have it as the first line of the notes instead.
-  const firstLine = place.notes.split('\n')[0].trim();
-  const where = place.where ?? (/^(cost|time|date):/i.test(firstLine) ? '' : firstLine);
+  const where = whereOf(place);
   const mentioned = namedInActivity(place.title ?? '');
   const named = mentioned && !isArea(mentioned) ? mentioned : null;
   const spot = named ?? (searchable(where) && !isArea(where) ? where : '');
@@ -86,9 +86,60 @@ export function checkPlace(place: SavedPlace, trip: Trip, names: Record<string, 
   return { status: 'missing', query: spot };
 }
 
+/** Where a plan happens, as written. Trips imported before `where` was kept have it as the first line of the notes. */
+export function whereOf(place: SavedPlace): string {
+  if (place.where !== undefined) return place.where;
+  const firstLine = place.notes.split('\n')[0].trim();
+  return /^(cost|time|date):/i.test(firstLine) ? '' : firstLine;
+}
+
+/**
+ * A plan with where it happens rewritten. Imports also wrote that in the first line of the notes,
+ * which is rewritten too, or dropped when the card will show the place it's linked to instead.
+ */
+export function rewriteWhere(place: SavedPlace, where: string, keepInNotes: boolean): SavedPlace {
+  const old = whereOf(place);
+  const [first, ...rest] = place.notes.split('\n');
+  const notes = old && first.trim() === old ? (keepInNotes && where ? [where, ...rest] : rest).join('\n') : place.notes;
+  return { ...place, where, notes };
+}
+
 /** Moves a plan's title into its notes when it gets a pin, since a pin shows the place's own name. */
 export function notesWithTitle(place: SavedPlace): string {
   const title = place.title?.trim();
   if (!title || place.notes.startsWith(title)) return place.notes;
   return place.notes ? `${title}\n${place.notes}` : title;
+}
+
+// Airport codes itineraries use, by the name the airport goes by.
+const AIRPORTS: Record<string, string> = {
+  hnd: 'Haneda', nrt: 'Narita', kix: 'Kansai', itm: 'Itami', cts: 'New Chitose', fuk: 'Fukuoka', oka: 'Naha', ngo: 'Chubu Centrair',
+  yyz: 'Toronto Pearson', yvr: 'Vancouver', yul: 'Montreal Trudeau', lax: 'Los Angeles', sfo: 'San Francisco', icn: 'Incheon', lhr: 'Heathrow',
+};
+
+/**
+ * Where a travel plan ("Flight: Toronto -> Haneda", "YYZ -> HND") takes them: the pinned place at the end of its arrow.
+ * That can be far from the plan's own city, since that's the point of travelling. A city at the end isn't a spot.
+ */
+export function travelTo(place: SavedPlace, trip: Trip, names: Record<string, string>): SavedPlace | null {
+  if (!isEntry(place)) return null;
+  const cityWords = new Set(trip.cities.flatMap((city) => simplify(city.name).split(' ')));
+  const isCity = (text: string) => trip.cities.some((city) => simplify(city.name) === simplify(text));
+  const ends = [place.title ?? '', whereOf(place)]
+    .map((text) => text.split(/->|→|=>/))
+    .filter((parts) => parts.length > 1)
+    .map((parts) => parts[parts.length - 1].replace(/\([^)]*\)/g, ' ').trim())
+    .map((end) => AIRPORTS[end.toLowerCase()] ?? end)
+    .filter((end) => end && !isCity(end));
+  for (const end of ends) {
+    let best: SavedPlace | null = null;
+    let bestScore = 0;
+    for (const other of trip.places) {
+      const name = !isEntry(other) ? names[other.placeId] : undefined;
+      const score = name ? sameSpot(name, end, cityWords) : 0;
+      if (score > bestScore) [best, bestScore] = [other, score];
+    }
+    if (best) return best;
+  }
+  return null;
 }

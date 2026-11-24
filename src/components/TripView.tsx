@@ -12,7 +12,7 @@ import {
   addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, tripRoute, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
-import { checkPlace } from '../checkPlaces';
+import { checkPlace, notesWithTitle, rewriteWhere, travelTo } from '../checkPlaces';
 import { AutoGroupDialog } from './AutoGroupDialog';
 import { CheckPlacesDialog } from './CheckPlacesDialog';
 import { BoxSelectLayer } from './BoxSelectLayer';
@@ -193,6 +193,62 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
     const check = checkPlace(place, trip, names);
     return check.status === 'same-spot' ? check.at : null;
   };
+  /** A box about 30 km across around a plan's day in its city, to keep a search for its place nearby. */
+  const nearPlan = (place: SavedPlace): Bounds | null => {
+    const located = (p: SavedPlace) => {
+      const info = details[p.placeId];
+      return info && info !== 'error' ? info.location : null;
+    };
+    const sameCity = trip.places.filter((p) => !isEntry(p) && p.cityId === place.cityId);
+    const anchor = sameCity.filter((p) => p.dayId === place.dayId).map(located).find(Boolean) ?? sameCity.map(located).find(Boolean);
+    return anchor ? { north: anchor.lat + 0.15, south: anchor.lat - 0.15, east: anchor.lng + 0.2, west: anchor.lng - 0.2 } : cityBounds;
+  };
+
+  const setWhere = (ids: string[], where: string) =>
+    update((current) => ({
+      ...current,
+      places: current.places.map((p) => (ids.includes(p.id) ? { ...rewriteWhere(p, where, true), spotId: undefined, noPin: undefined } : p)),
+    }));
+
+  const pickPlanPlace = (place: SavedPlace, suggestion: Suggestion, others: string[]) => {
+    suggestion
+      .resolve()
+      .then((found) =>
+        update((current) => {
+          const linked = new Set([place.id, ...others]);
+          const link = (places: SavedPlace[], spotId: string) =>
+            places.map((p) => (linked.has(p.id) ? { ...rewriteWhere(p, found.name, false), spotId, noPin: undefined } : p));
+          // Already on the map: the plans happen there.
+          const existing = current.places.find((p) => p.placeId === found.placeId && !isEntry(p));
+          if (existing) return { ...current, places: link(current.places, existing.id) };
+          const city = current.cities.find((c) => c.name.toLowerCase() === found.city.toLowerCase());
+          // A hotel becomes a home base that the plans happen at.
+          if (found.types.includes('lodging')) {
+            const hotel: SavedPlace = { id: crypto.randomUUID(), placeId: found.placeId, cityId: city?.id ?? place.cityId, dayId: null, homeBase: true, notes: '' };
+            return { ...current, places: link([...current.places, hotel], hotel.id) };
+          }
+          // Anywhere else, the plan becomes the pin, and others at the same place happen there.
+          const day = current.days.find((d) => d.id === place.dayId);
+          const cityId = city && (!day || day.cityIds.includes(city.id)) ? city.id : place.cityId;
+          const pinned = (p: SavedPlace) => {
+            const moved = rewriteWhere(p, found.name, false);
+            return { ...moved, notes: notesWithTitle(moved), placeId: found.placeId, cityId, title: undefined, noPin: undefined, spotId: undefined };
+          };
+          return {
+            ...current,
+            places: current.places.map((p) =>
+              p.id === place.id
+                ? pinned(p)
+                : others.includes(p.id)
+                  ? { ...rewriteWhere(p, found.name, false), spotId: place.id, noPin: undefined }
+                  : p,
+            ),
+          };
+        }),
+      )
+      .catch(lookupFailed);
+  };
+
   const selectedPlace = trip.places.find((p) => p.id === selectedId);
   const selectedSpotId = selectedPlace ? spotOf(selectedPlace)?.id ?? null : null;
 
@@ -203,7 +259,8 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
       const info = details[place.placeId];
       return info && info !== 'error' ? info.location : null;
     };
-    return tripRoute(trip, spotOf)
+    // A flight or transfer moves them to where it lands, so the next day starts there.
+    return tripRoute(trip, (place) => travelTo(place, trip, names) ?? spotOf(place))
       .filter((leg) => activeFocus === ALL || leg.dayId === activeFocus)
       .flatMap((leg) => {
         const from = located(leg.from);
@@ -213,9 +270,25 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
       });
   }, [step, showRoute, trip, details, names, activeFocus]);
 
+  // The places some days go to, counting the hotel a "Wake" or "Breakfast" happens at.
+  const stopsOn = (dayIds: string[]) => {
+    const ids = new Set<string>();
+    for (const place of trip.places) {
+      if (!place.dayId || !dayIds.includes(place.dayId)) continue;
+      // A flight's day takes in where it lands as well as where it leaves.
+      const stops = isEntry(place) ? [spotOf(place), travelTo(place, trip, names)] : [place];
+      for (const stop of stops) if (stop) ids.add(stop.id);
+    }
+    return [...ids];
+  };
+  const focusedDay = activeFocus !== ALL && activeFocus !== UNSCHEDULED ? activeFocus : null;
+
   const pins = useMemo(() => {
     const result: MapPin[] = [];
-    for (const place of shown) {
+    // A day in focus also shows the places its plans happen at or travel to, even when they're pinned to another day.
+    const stops = focusedDay ? stopsOn([focusedDay]) : [];
+    const extra = trip.places.filter((p) => stops.includes(p.id) && !shown.includes(p));
+    for (const place of [...shown, ...extra]) {
       const info = details[place.placeId];
       if (!info || info === 'error') continue;
       const day = trip.days.find((d) => d.id === place.dayId);
@@ -242,21 +315,10 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
       });
     }
     return result;
-  }, [shown, details, trip, selectedId, selectedSpotId, preview, boxIds]);
+  }, [shown, details, trip, names, focusedDay, selectedId, selectedSpotId, preview, boxIds]);
 
   const pending = shown.some((p) => !isEntry(p) && details[p.placeId] === undefined);
   // In the schedule the map frames the days showing on the board, or all of them when one is in focus.
-  // The places some days go to, counting the hotel a "Wake" or "Breakfast" happens at.
-  const stopsOn = (dayIds: string[]) => {
-    const ids = new Set<string>();
-    for (const place of trip.places) {
-      if (!place.dayId || !dayIds.includes(place.dayId)) continue;
-      const stop = isEntry(place) ? spotOf(place) : place;
-      if (stop) ids.add(stop.id);
-    }
-    return [...ids];
-  };
-  const focusedDay = activeFocus !== ALL && activeFocus !== UNSCHEDULED ? activeFocus : null;
   const fitIds = step !== 'days' ? undefined : focusedDay ? stopsOn([focusedDay]) : framedDays.length ? stopsOn(framedDays) : undefined;
   const fitKey = [
     // The map is narrower in Plan days, so each step needs its own framing.
@@ -573,6 +635,10 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onCheckPlaces={() => setChecking(true)}
             onDaysInView={setDaysInView}
             spotOf={spotOf}
+            travelTo={(place) => travelTo(place, trip, names)}
+            searchNear={(place, query) => provider.searchPlaces(query, nearPlan(place))}
+            onSetWhere={setWhere}
+            onPickPlace={pickPlanPlace}
             unresolved={(place) => {
               const check = checkPlace(place, trip, names);
               return check.status === 'missing' ? check.query : null;
