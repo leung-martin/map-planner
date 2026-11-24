@@ -87,14 +87,22 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   // Days showing on the board, which the map frames. Settles before reframing so scrolling doesn't jolt the map.
   const [daysInView, setDaysInView] = useState<string[]>([]);
   const [framedDays, setFramedDays] = useState<string[]>([]);
+  // A selected place keeps the map on it, even as the board scrolls to show its card.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
+    if (selectedId) return;
     const timer = window.setTimeout(() => setFramedDays(daysInView), 350);
     return () => window.clearTimeout(timer);
-  }, [daysInView]);
+  }, [daysInView, selectedId]);
+  // Counts selections, so picking the same place again brings the map back to it.
+  const [focusTick, setFocusTick] = useState(0);
+  const select = (id: string | null) => {
+    setSelectedId(id);
+    if (id) setFocusTick((tick) => tick + 1);
+  };
   // A trip through several cities opens on all of them, which is how an imported itinerary reads best.
   const [tab, setTab] = useState(trip.cities.length === 1 ? trip.cities[0].id : ALL);
   const [focus, setFocus] = useState(ALL);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [addingCity, setAddingCity] = useState(trip.cities.length === 0);
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
@@ -503,7 +511,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             focus={activeFocus}
             unscheduledKey={UNSCHEDULED}
             canAutoGroup={city !== null && mustHaves.length + maybes.length > 0}
-            onSelect={setSelectedId}
+            onSelect={select}
             onMove={(id, dayId) => update((current) => movePlaceToEnd(current, id, dayId))}
             onMoveBeside={(id, targetId, after) => update((current) => movePlaceBeside(current, id, targetId, after))}
             onMoveDay={(dayId, targetId) => update((current) => moveDayOnto(current, dayId, targetId))}
@@ -532,6 +540,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             pins={pins}
             fitKey={fitKey}
             fitIds={fitIds}
+            focusKey={focusTick}
             fallback={cityBounds}
             popout={preview && {
               location: preview.details.location,
@@ -559,7 +568,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onPinClick={(id) => {
               if (id === 'preview') return;
               setPreview(null);
-              setSelectedId(id);
+              select(id);
             }}
             onPoiClick={onPoiClick}
             onViewChange={(area) => {

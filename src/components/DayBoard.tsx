@@ -238,7 +238,7 @@ export function DayBoard({
             setDraggingId(place.id);
           }}
           onDragEnd={endDrag}
-          onClick={() => onSelect(place.id === selectedId ? null : place.id)}
+          onClick={() => onSelect(place.id)}
         >
           <span className="card-text">
             {(place.time || place.endTime) && <span className="card-time">{timeRange(place)}</span>}

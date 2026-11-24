@@ -69,7 +69,7 @@ function Popout({ map, location, children }: { map: google.maps.Map; location: L
   return createPortal(children, holder);
 }
 
-export function GoogleMapView({ pins, fitKey, fallback, fitIds, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
+export function GoogleMapView({ pins, fitKey, fallback, fitIds, focusKey, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
@@ -166,7 +166,7 @@ export function GoogleMapView({ pins, fitKey, fallback, fitIds, popout, onPinCli
     const dLat = 0.5 / 111;
     const dLng = dLat / Math.max(0.2, Math.cos((lat * Math.PI) / 180));
     map.current.fitBounds({ north: lat + dLat, south: lat - dLat, east: lng + dLng, west: lng - dLng }, 0);
-  }, [selected?.id, selected?.placeId]);
+  }, [selected?.id, selected?.placeId, focusKey]);
 
   return (
     <div className="map-fill">
