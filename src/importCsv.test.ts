@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTrip, CsvError, namedInActivity, parseCsv, parseTimeSlot, readTripsCsv, type FoundPlace, type PlaceLookup } from './importCsv';
+import { buildTrip, CsvError, namedInActivity, parseCsv, placesInActivity, parseTimeSlot, readTripsCsv, type FoundPlace, type PlaceLookup } from './importCsv';
 import { inDayOrder, isEntry } from './trip';
 import type { SavedPlace } from './types';
 
@@ -54,6 +54,17 @@ describe('namedInActivity', () => {
     expect(namedInActivity('Head to the gate')).toBeNull();
     expect(namedInActivity('No schedule — walk around Tokyo')).toBeNull();
     expect(namedInActivity('Wake')).toBeNull();
+  });
+});
+
+describe('placesInActivity', () => {
+  it('finds a list of places but not alternatives or to-dos', () => {
+    expect(placesInActivity('Hokkaido Jingu, AEON mall')).toEqual(['Hokkaido Jingu', 'AEON mall']);
+    expect(placesInActivity('Visit Otaru Canal & Sankaku Market (三角市場)')).toEqual(['Otaru Canal', 'Sankaku Market']);
+    expect(placesInActivity('Dinner options: Crab, Genghis Khan, Nemuro Hanamaru')).toEqual([]);
+    expect(placesInActivity('Check out & return car')).toEqual([]);
+    expect(placesInActivity('Check in first, walk around and Soup Curry Garaku')).toEqual([]);
+    expect(placesInActivity('Ski/snowboard')).toEqual([]);
   });
 });
 
@@ -115,6 +126,18 @@ describe('buildTrip', () => {
     const { trip } = await buildTrip(source, lookup);
     expect(trip.places.filter((p) => p.placeId).map((p) => p.placeId)).toEqual(['hotel', 'ropeway']);
     expect(trip.places.find((p) => p.placeId === 'ropeway')!.notes).toBe('Head to Moiwa Ropeway');
+  });
+
+  it('pins each place a row lists, and keeps no plan once all are found', async () => {
+    const rows = [HEADER, 'J,Japan,itinerary,2026-11-30,,1:30 PM - 4:30 PM,"Otaru Canal, Moiwa Ropeway",Sapporo,Vessel Inn,,,'];
+    const [source] = readTripsCsv(rows.join(String.fromCharCode(10)));
+    const { trip } = await buildTrip(source, lookup);
+    const listed = trip.places.filter((p) => p.placeId === 'canal' || p.placeId === 'ropeway');
+    expect(listed.map((p) => [p.placeId, p.time, p.endTime, p.notes])).toEqual([
+      ['canal', '13:30', '16:30', 'Otaru Canal, Moiwa Ropeway'],
+      ['ropeway', '13:30', '16:30', 'Otaru Canal, Moiwa Ropeway'],
+    ]);
+    expect(trip.places.filter(isEntry)).toEqual([]);
   });
 
   it('merges a city Google names two ways', async () => {

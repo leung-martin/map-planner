@@ -74,8 +74,32 @@ export function CheckPlacesDialog({ trip, provider, details, onUpdate, onShow, o
     return anchor ? around(anchor.lat, anchor.lng) : null;
   };
 
-  const pin = (place: SavedPlace, found: PlaceDetails) => {
+  const pin = (place: SavedPlace, found: PlaceDetails, check: Check) => {
     setSearchingId(null);
+    if (check.status === 'missing' && check.inList) {
+      // One of several places in a plan gets its own pin beside it; the plan goes once they all have one.
+      onUpdate((current) => {
+        const index = current.places.findIndex((p) => p.id === place.id);
+        const day = current.days.find((d) => d.id === place.dayId);
+        const city = current.cities.find((c) => c.name.toLowerCase() === found.city.toLowerCase());
+        const added: SavedPlace = {
+          id: crypto.randomUUID(),
+          placeId: found.placeId,
+          cityId: city && (!day || day.cityIds.includes(city.id)) ? city.id : place.cityId,
+          dayId: place.dayId,
+          mustHave: true,
+          notes: notesWithTitle(place),
+          ...(place.time ? { time: place.time } : {}),
+          ...(place.endTime ? { endTime: place.endTime } : {}),
+        };
+        const places = [...current.places];
+        places.splice(index + 1, 0, added);
+        const next = { ...current, places };
+        const after = checkPlace(place, next, { ...names, [found.placeId]: found.name });
+        return after.status === 'same-spot' ? { ...next, places: places.filter((p) => p.id !== place.id) } : next;
+      });
+      return;
+    }
     onUpdate((current) => ({
       ...current,
       places: current.places.map((p) => {
@@ -131,7 +155,11 @@ export function CheckPlacesDialog({ trip, provider, details, onUpdate, onShow, o
               <span className="clip">At <b>{names[check.at.placeId]}</b></span>
             </span>
           )}
-          {check.status === 'missing' && <span className="check-found missing"><MapPinOff size={16} aria-hidden="true" /> Not on the map</span>}
+          {check.status === 'missing' && (
+            <span className="check-found missing">
+              <MapPinOff size={16} aria-hidden="true" /> {check.inList ? <span className="clip">Not on the map: {check.query}</span> : 'Not on the map'}
+            </span>
+          )}
           {check.status === 'skipped' && <span className="check-found muted"><MapPinOff size={16} aria-hidden="true" /> No pin</span>}
           <span className="check-actions">
             {check.status !== 'same-spot' && (
@@ -154,7 +182,7 @@ export function CheckPlacesDialog({ trip, provider, details, onUpdate, onShow, o
               search={(text) => provider.searchPlaces(text, biasFor(place))}
               onPick={(suggestion) => {
                 setError('');
-                suggestion.resolve().then((found) => pin(place, found)).catch(() => setError('Couldn’t load that place. Try again.'));
+                suggestion.resolve().then((found) => pin(place, found, check)).catch(() => setError('Couldn’t load that place. Try again.'));
               }}
             />
           </div>

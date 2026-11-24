@@ -534,3 +534,5 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 }
 .card-editor-spot { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .card-editor-spot > svg { flex: none; color: var(--accent); }
+.card-spot { display: flex; align-items: center; gap: 4px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-spot svg { flex: none; }

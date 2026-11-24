@@ -37,6 +37,16 @@ describe('checkPlace', () => {
     const onlySapporo = { ...twoCities, places: [hotel, sapporoIchiran] };
     expect(checkPlace(item({ title: 'Dinner — Ichiran Ramen', cityId: 'tokyo' }), onlySapporo, branchNames).status).toBe('missing');
   });
+  it('needs a pin for each place a plan lists', () => {
+    const shrine = item({ id: 'j', placeId: 'jingu' });
+    const withShrine = { ...trip, places: [hotel, shrine] };
+    const both = { ...names, jingu: 'Hokkaido Jingu' };
+    const plan = item({ title: 'Hokkaido Jingu, AEON mall', where: 'Sapporo' });
+    expect(checkPlace(plan, trip, names)).toEqual({ status: 'missing', query: 'Hokkaido Jingu', inList: true });
+    expect(checkPlace(plan, withShrine, both)).toEqual({ status: 'missing', query: 'AEON mall', inList: true });
+    const mall = item({ id: 'm', placeId: 'aeon' });
+    expect(checkPlace(plan, { ...trip, places: [hotel, shrine, mall] }, { ...both, aeon: 'AEON Mall Sapporo Hassamu' })).toEqual({ status: 'same-spot', at: shrine });
+  });
   it('skips plans that only name a city or a route, and ones marked as not a place', () => {
     expect(checkPlace(item({ title: 'Wake', where: 'Sapporo' }), trip, names).status).toBe('skipped');
     expect(checkPlace(item({ title: 'Bus', where: 'CTS -> Sapporo' }), trip, names).status).toBe('skipped');

@@ -1,4 +1,4 @@
-import { namedInActivity, searchable } from './importCsv';
+import { namedInActivity, placesInActivity, searchable } from './importCsv';
 import { isEntry } from './trip';
 import type { SavedPlace, Trip } from './types';
 
@@ -10,7 +10,7 @@ export type Check =
   /** Happens at a place that already has a pin, like breakfast at the hotel. */
   | { status: 'same-spot'; at: SavedPlace }
   /** Names a place but has no pin. */
-  | { status: 'missing'; query: string }
+  | { status: 'missing'; query: string; inList?: boolean }
   /** Marked as not a place, or nothing in it names one (a flight, "Wake"). */
   | { status: 'skipped'; query: string };
 
@@ -52,19 +52,35 @@ export function checkPlace(place: SavedPlace, trip: Trip, names: Record<string, 
   const nearby = (other: SavedPlace) =>
     other.cityId === place.cityId || (day?.cityIds.includes(other.cityId) ?? false) || (place.dayId !== null && other.dayId === place.dayId);
   const title = simplify(place.title ?? '');
-  let best: SavedPlace | null = null;
-  let bestScore = 0;
-  for (const other of trip.places) {
-    const name = !isEntry(other) ? names[other.placeId] : undefined;
-    if (!name || other.id === place.id) continue;
-    const full = simplify(name);
-    // "Check into Vessel Inn Sapporo Nakajima Park" names the hotel outright.
-    let score = full.length >= 6 && title.includes(full) ? 100 : spot ? sameSpot(name, spot, cityWords) : 0;
-    if (score < 100 && !nearby(other)) score = 0;
-    // Among equals, the pin on the same day wins.
-    if (score > 0 && other.dayId === place.dayId) score += 0.5;
-    if (score > bestScore) [best, bestScore] = [other, score];
+  /** The pin that best matches some text, or that the whole title names outright. */
+  const pinFor = (text: string, byTitle: boolean): SavedPlace | null => {
+    let best: SavedPlace | null = null;
+    let bestScore = 0;
+    for (const other of trip.places) {
+      const name = !isEntry(other) ? names[other.placeId] : undefined;
+      if (!name || other.id === place.id) continue;
+      const full = simplify(name);
+      // "Check into Vessel Inn Sapporo Nakajima Park" names the hotel outright.
+      let score = byTitle && full.length >= 6 && title.includes(full) ? 100 : text ? sameSpot(name, text, cityWords) : 0;
+      if (score < 100 && !nearby(other)) score = 0;
+      // Among equals, the pin on the same day wins.
+      if (score > 0 && other.dayId === place.dayId) score += 0.5;
+      if (score > bestScore) [best, bestScore] = [other, score];
+    }
+    return best;
+  };
+
+  // "Hokkaido Jingu, AEON mall" needs a pin for each place.
+  const list = placesInActivity(place.title ?? '').filter((name) => !isArea(name));
+  if (list.length >= 2) {
+    const pins = list.map((name) => pinFor(name, false));
+    const unpinned = list.find((_, i) => !pins[i]);
+    if (!unpinned) return { status: 'same-spot', at: pins[0]! };
+    if (place.noPin) return { status: 'skipped', query: unpinned };
+    return { status: 'missing', query: unpinned, inList: true };
   }
+
+  const best = pinFor(spot, true);
   if (best) return { status: 'same-spot', at: best };
   if (place.noPin || !spot) return { status: 'skipped', query: spot || place.title || '' };
   return { status: 'missing', query: spot };

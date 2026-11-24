@@ -35,6 +35,8 @@ type Props = {
   onDaysInView(dayIds: string[]): void;
   /** The pinned place a plan happens at, if it's one already on the map. */
   spotOf(place: SavedPlace): SavedPlace | null;
+  /** What background scoring is doing, if anything. */
+  status?: string;
 };
 
 const starredFirst = (a: SavedPlace, b: SavedPlace) => Number(Boolean(b.mustHave)) - Number(Boolean(a.mustHave));
@@ -60,7 +62,7 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf, status,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -196,6 +198,11 @@ export function DayBoard({
 
   const card = (place: SavedPlace) => {
     const info = details[place.placeId];
+    // A plan at a pinned place shows that place, and its ratings unless it's where they're staying.
+    const spot = isEntry(place) ? spotOf(place) : null;
+    const spotDetails = spot ? details[spot.placeId] : undefined;
+    const spotInfo = spotDetails && spotDetails !== 'error' ? spotDetails : null;
+    const scores = place.scores ?? (spot && !spot.homeBase ? spot.scores : undefined);
     const column = days.find((day) => day.id === place.dayId);
     const canDropBeside = Boolean(dragging && column && dragging.id !== place.id && accepts(dragging, column));
     const lowerHalf = (event: DragEvent) => {
@@ -242,10 +249,15 @@ export function DayBoard({
               {nameOf(place)}
             </span>
             {!isEntry(place) && <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>}
+            {spotInfo && (
+              <span className="card-location card-spot small">
+                <MapPin size={13} aria-hidden="true" /> {spotInfo.name}
+              </span>
+            )}
             {place.notes && <span className="card-note small">{place.notes}</span>}
-            {place.scores && <ScoreTotal scores={place.scores} />}
+            {scores && <ScoreTotal scores={scores} />}
           </span>
-          {place.scores && <ScoreStack scores={place.scores} />}
+          {scores && <ScoreStack scores={scores} />}
         </button>
       </li>
     );
@@ -281,7 +293,7 @@ export function DayBoard({
     <section className="board-panel">
       <div className="board-tools">
         <h2 className="bar-title">Days</h2>
-        <p className="muted small grow board-hint">Drag places onto days and into order. Drag a day’s heading to move the day.</p>
+        <p className="muted small grow board-hint" role="status">{status || 'Drag places onto days and into order. Drag a day’s heading to move the day.'}</p>
         {days.length > 1 && (
           <nav className="day-jump" aria-label="Jump to a day">
             {days.map((day) => {

@@ -128,6 +128,23 @@ export function namedInActivity(activity: string): string | null {
   return name && /^[A-Z0-9]/.test(name.trim()) ? name.trim() : null;
 }
 
+// Words that start a to-do rather than a place's name.
+const DOING = /^(check|head|walk|drive|go|back|return|rest|pick|buy|get|eat|wake|sleep|pack|gear|free|must|try|see|grab|take|meet|find|shop|explore|lunch|dinner|breakfast|no)\b/i;
+
+/**
+ * Several places named in one activity, as in "Hokkaido Jingu, AEON mall".
+ * Alternatives ("Dinner options: Crab, Ichiran") aren't places to visit, and to-dos ("Check out & return car") aren't places.
+ */
+export function placesInActivity(activity: string): string[] {
+  if (/\boptions?\b|\bor\b/i.test(activity)) return [];
+  const parts = activity
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/\s*(?:,|&|\+|\band\b)\s*/)
+    .map((part) => part.replace(/^visit\s+/i, '').trim())
+    .filter((part) => /^[A-Z0-9]/.test(part) && !DOING.test(part) && part.split(/\s+/).length <= 5);
+  return parts.length >= 2 ? parts : [];
+}
+
 // A place named in an activity must be this close to where the day is, or it's probably a different branch.
 const NAMED_PLACE_KM = 60;
 
@@ -173,20 +190,27 @@ export async function buildTrip(
   let done = 0;
   const total = source.rows.length;
   onProgress(0, total);
-  const matched = await Promise.all(
+  const results = await Promise.all(
     source.rows.map(async (row) => {
       const near = hotels.get(row.overnight_stay)?.location ?? null;
       let found = searchable(row.location_or_route) ? await find(row.location_or_route, near) : null;
       const named = found && isVenue(found) ? null : namedInActivity(row.activity_or_item ?? '');
+      const close = (place: FoundPlace | null, around: LatLng | null): place is FoundPlace =>
+        Boolean(place && isVenue(place) && (!around || distanceKm(around, place.location) < NAMED_PLACE_KM));
       if (named) {
         const around = found?.location ?? near;
         const alternative = await find(named, around);
-        if (alternative && isVenue(alternative) && (!around || distanceKm(around, alternative.location) < NAMED_PLACE_KM)) found = alternative;
+        if (close(alternative, around)) found = alternative;
       }
+      // "Hokkaido Jingu, AEON mall": each place gets a pin.
+      const list = found && isVenue(found) ? [] : placesInActivity(row.activity_or_item ?? '');
+      const around = found?.location ?? near;
+      const hits = (await Promise.all(list.map((name) => find(name, around)))).filter((hit) => close(hit, around));
       onProgress(++done, total);
-      return found;
+      return { found, listed: hits, listSize: list.length };
     }),
   );
+  const matched = results.map((m) => m.found);
 
   // Cities in the order the trip reaches them.
   const cityNames: string[] = [];
@@ -201,6 +225,7 @@ export async function buildTrip(
   source.rows.forEach((row, i) => {
     noteCity(hotels.get(row.overnight_stay));
     noteCity(matched[i]);
+    results[i].listed.forEach(noteCity);
   });
   if (cityNames.length === 0) throw new CsvError(`None of the places in “${source.title}” could be found on Google Maps.`);
 
@@ -229,9 +254,10 @@ export async function buildTrip(
     const visited: string[] = [];
     source.rows.forEach((row, i) => {
       if (row.date_iso !== date) return;
-      const city = matched[i]?.city;
-      const id = city ? cityIds.get(city) : undefined;
-      if (id && !visited.includes(id)) visited.push(id);
+      for (const city of [matched[i]?.city, ...results[i].listed.map((hit) => hit.city)]) {
+        const id = city ? cityIds.get(city) : undefined;
+        if (id && !visited.includes(id)) visited.push(id);
+      }
     });
     const dayCities = visited.length ? visited : [lastCityId];
     lastCityId = dayCities[dayCities.length - 1];
@@ -258,6 +284,24 @@ export async function buildTrip(
     const times = { ...(slot.time ? { time: slot.time } : {}), ...(slot.endTime ? { endTime: slot.endTime } : {}) };
     const timeNote = slot.text ? `Time: ${slot.text}` : undefined;
     const dateNote = !dayId && row.raw_date_label ? `Date: ${row.raw_date_label}` : undefined;
+
+    const { listed, listSize } = results[i];
+    for (const hit of listed) {
+      if (pinned.has(hit.placeId)) continue;
+      pinned.add(hit.placeId);
+      const cityId = cityIds.get(hit.city);
+      places.push({
+        id: crypto.randomUUID(),
+        placeId: hit.placeId,
+        cityId: cityId && (!day || day.cityIds.includes(cityId)) ? cityId : day?.cityIds[0] ?? cities[0].id,
+        dayId,
+        mustHave: row.record_type !== 'wishlist_idea',
+        notes: notesFor(row, [row.activity_or_item, timeNote, dateNote]),
+        ...times,
+      });
+    }
+    // Every place in the list has a pin, so the row needs no plan of its own.
+    if (listSize > 0 && listed.length === listSize) return;
 
     if (found && isVenue(found) && !pinned.has(found.placeId)) {
       pinned.add(found.placeId);

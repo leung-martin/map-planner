@@ -521,6 +521,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onCheckPlaces={() => setChecking(true)}
             onDaysInView={setDaysInView}
             spotOf={spotOf}
+            status={scoringMessage}
           />
         )}
         {step === 'days' && <Splitter container={workspace} value={mapShare} onChange={setMapShare} />}
