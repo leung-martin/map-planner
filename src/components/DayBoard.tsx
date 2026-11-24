@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronLeft, ChevronRight, House, MapPin, MapPinned, MapPinOff, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, House, Navigation, MapPin, MapPinned, MapPinOff, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { whereOf } from '../checkPlaces';
@@ -48,6 +48,12 @@ type Props = {
   onPickPlace(place: SavedPlace, suggestion: Suggestion, others: string[]): void;
   /** What background scoring is doing, if anything. */
   status?: string;
+  /** A phone: one day fills the board, and tapping a card shows it on the map before offering to edit it. */
+  compact?: boolean;
+  /** The number of the card's stop on the map, when a day is in focus. */
+  stopNumber?(place: SavedPlace): number | null;
+  /** A link for directions to where the card happens, if that's on the map. */
+  directionsTo?(place: SavedPlace): string | null;
 };
 
 const starredFirst = (a: SavedPlace, b: SavedPlace) => Number(Boolean(b.mustHave)) - Number(Boolean(a.mustHave));
@@ -74,7 +80,11 @@ const formatDate = (date: string) =>
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
   onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf, unresolved, travelTo, searchNear, onSetWhere, onPickPlace, status,
+  compact = false, stopNumber = () => null, directionsTo = () => null,
 }: Props) {
+  // On a phone the editor waits for Edit, so a tap just finds the place on the map.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = !compact || (selectedId !== null && editingId === selectedId);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState({ left: false, right: false });
@@ -143,7 +153,7 @@ export function DayBoard({
       window.removeEventListener('resize', place);
       document.removeEventListener('scroll', place, true);
     };
-  }, [selectedId]);
+  }, [selectedId, editing]);
 
   // Escape or a tap elsewhere closes the editor. Cards and the map pick a new selection themselves.
   useEffect(() => {
@@ -151,7 +161,7 @@ export function DayBoard({
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onSelect(null);
     const onDown = (event: PointerEvent) => {
       const target = event.target as Element;
-      if (!target.closest('.card-editor, .card, .map-pane, dialog')) onSelect(null);
+      if (!target.closest('.card-editor, .card, .card-actions, .map-pane, dialog')) onSelect(null);
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDown, true);
@@ -163,8 +173,19 @@ export function DayBoard({
 
   // Whatever gets selected, on the map or elsewhere, is brought into view on the board.
   useEffect(() => {
-    if (selectedId) board.current?.querySelector('.card.selected')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    if (selectedId) board.current?.querySelector('.card.selected')?.closest('li')?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
   }, [selectedId]);
+
+  // On a phone during the trip, the board opens on today.
+  useEffect(() => {
+    if (!compact) return;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const day = days.find((d) => d.date === today);
+    const el = board.current;
+    const column = day && el?.querySelector<HTMLElement>(`[data-day-id="${day.id}"]`);
+    if (el && column) el.scrollLeft = column.offsetLeft - el.offsetLeft;
+  }, [compact]);
 
   const scrollPage = (direction: -1 | 1) => {
     const el = board.current;
@@ -176,7 +197,7 @@ export function DayBoard({
     const column = el?.querySelector(`[data-day-id="${dayId}"]`);
     if (!el || !column) return;
     const offset = column.getBoundingClientRect().left - el.getBoundingClientRect().left;
-    el.scrollTo({ left: el.scrollLeft + offset - 48, behavior: 'smooth' });
+    el.scrollTo({ left: el.scrollLeft + offset - (compact ? 0 : 48), behavior: 'smooth' });
   };
 
   // A mouse wheel over headings or gaps scrolls sideways; over a day's list it still scrolls the list.
@@ -219,6 +240,8 @@ export function DayBoard({
     const missing = isEntry(place) && !spot && !goesTo ? unresolved(place) : null;
     const column = days.find((day) => day.id === place.dayId);
     const canDropBeside = Boolean(dragging && column && dragging.id !== place.id && accepts(dragging, column));
+    const number = stopNumber(place);
+    const directions = compact && place.id === selectedId ? directionsTo(place) : null;
     const lowerHalf = (event: DragEvent) => {
       const box = event.currentTarget.getBoundingClientRect();
       return event.clientY > box.top + box.height / 2;
@@ -254,6 +277,9 @@ export function DayBoard({
           onDragEnd={endDrag}
           onClick={() => onSelect(place.id)}
         >
+          {number !== null && (
+            <span className="card-stop" style={column ? { background: dayColor(column) } : undefined} aria-label={`Stop ${number}`}>{number}</span>
+          )}
           <span className="card-text">
             {(place.time || place.endTime) && <span className="card-time">{timeRange(place)}</span>}
             <span className="card-name">
@@ -287,6 +313,18 @@ export function DayBoard({
           </span>
           {scores && <ScoreStack scores={scores} />}
         </button>
+        {compact && place.id === selectedId && (
+          <div className="card-actions">
+            {directions && (
+              <a className="chip" href={directions} target="_blank" rel="noreferrer">
+                <Navigation size={16} aria-hidden="true" /> Directions
+              </a>
+            )}
+            <button className="chip" onClick={() => setEditingId(place.id)}>
+              <Pencil size={16} aria-hidden="true" /> Edit
+            </button>
+          </div>
+        )}
       </li>
     );
   };
@@ -341,9 +379,9 @@ export function DayBoard({
             })}
           </nav>
         )}
-        <button className="chip add" onClick={onCheckPlaces} title="Check each place landed on the right spot"><MapPinned size={17} aria-hidden="true" /> Check places</button>
-        {canAutoGroup && <button className="chip add" onClick={onAutoGroup}><LayoutGrid size={17} aria-hidden="true" /> Auto-group</button>}
-        <button className="chip add" onClick={onAddDay}><Plus size={17} aria-hidden="true" /> Day</button>
+        <button className="chip add" onClick={onCheckPlaces} title="Check each place landed on the right spot" aria-label="Check places"><MapPinned size={17} aria-hidden="true" /><span className="tool-label"> Check places</span></button>
+        {canAutoGroup && <button className="chip add" onClick={onAutoGroup} title="Auto-group" aria-label="Auto-group"><LayoutGrid size={17} aria-hidden="true" /><span className="tool-label"> Auto-group</span></button>}
+        <button className="chip add" onClick={onAddDay} title="Add a day" aria-label="Add a day"><Plus size={17} aria-hidden="true" /><span className="tool-label"> Day</span></button>
       </div>
 
       <div className={['board-wrap', more.left && 'more-left', more.right && 'more-right'].filter(Boolean).join(' ')}>
@@ -357,7 +395,7 @@ export function DayBoard({
           <ChevronRight size={26} aria-hidden="true" />
         </button>
       )}
-      <div className="board" ref={board} onWheel={onWheel}>
+      <div className={compact ? 'board one-day' : 'board'} ref={board} onWheel={onWheel}>
         <div className={`${columnClass(unscheduledKey, !draggingDayId)}${tray.length === 0 ? ' tray-empty' : ''}`} {...dropProps(unscheduledKey, null, !draggingDayId)}>
           <h3 className="column-head">
             <button className="column-title" aria-pressed={focus === unscheduledKey} onClick={() => onFocus(unscheduledKey)}>
@@ -367,8 +405,9 @@ export function DayBoard({
           <ul className="column-list">{tray.map(card)}</ul>
         </div>
 
-        {days.map((day) => {
+        {days.map((day, index) => {
           const number = dayNumber(trip, day.id);
+          const [before, after] = [days[index - 1], days[index + 1]];
           const dayPlaces = inDayOrder(places.filter((place) => place.dayId === day.id));
           const allowed = draggingDayId !== null || accepts(dragging, day);
           return (
@@ -383,6 +422,11 @@ export function DayBoard({
                 }}
                 onDragEnd={endDrag}
               >
+                {compact && (
+                  <button className="icon-button day-step" disabled={!before} aria-label="Previous day" onClick={() => before && jumpTo(before.id)}>
+                    <ChevronLeft size={22} aria-hidden="true" />
+                  </button>
+                )}
                 <button className="column-title" aria-pressed={focus === day.id} onClick={() => onFocus(day.id)}>
                   <span className="dot" style={{ background: dayColor(day) }}>{number}</span>
                   <span className="clip grow">
@@ -393,6 +437,11 @@ export function DayBoard({
                 <button className="text-button" title="Edit day" aria-label={`Edit day ${number}`} onClick={() => onEditDay(day.id)}>
                   <Pencil size={17} aria-hidden="true" />
                 </button>
+                {compact && (
+                  <button className="icon-button day-step" disabled={!after} aria-label="Next day" onClick={() => after && jumpTo(after.id)}>
+                    <ChevronRight size={22} aria-hidden="true" />
+                  </button>
+                )}
               </h3>
               <ul className="column-list">{dayPlaces.map(card)}</ul>
               <AddPlan onAdd={(title) => onAddPlan(day, title)} />
@@ -404,7 +453,7 @@ export function DayBoard({
       </div>
       </div>
 
-      {selected && createPortal(
+      {selected && editing && createPortal(
         <div
           ref={editor}
           className="card-editor"

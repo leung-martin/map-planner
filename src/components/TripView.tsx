@@ -8,8 +8,9 @@ import type { Scorer } from '../scoring';
 import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
 import { useScoring } from '../useScoring';
+import { useNarrow } from '../useNarrow';
 import {
-  addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, tripRoute, updatePlace,
+  addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, inDayOrder, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, tripRoute, updatePlace, directionsUrl,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { checkPlace, notesWithTitle, rewriteWhere, travelTo } from '../checkPlaces';
@@ -177,9 +178,13 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   });
 
   const activeFocus = step === 'days' && (focus === UNSCHEDULED || days.some((d) => d.id === focus)) ? focus : ALL;
+  // A phone's board shows one day at a time, so the map shows just that day, as if it were in focus.
+  const narrow = useNarrow();
+  const phoneDay = narrow && step === 'days' && activeFocus === ALL && framedDays.length === 1 ? framedDays[0] : null;
+  const viewKey = phoneDay ?? activeFocus;
   const shown = useMemo(
-    () => cityPlaces.filter((p) => p.homeBase || activeFocus === ALL || p.dayId === (activeFocus === UNSCHEDULED ? null : activeFocus)),
-    [cityPlaces, activeFocus],
+    () => cityPlaces.filter((p) => p.homeBase || viewKey === ALL || p.dayId === (viewKey === UNSCHEDULED ? null : viewKey)),
+    [cityPlaces, viewKey],
   );
 
   // A plan without a pin that happens at a pinned place, like breakfast at the hotel, shows that place.
@@ -261,14 +266,14 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
     };
     // A flight or transfer moves them to where it lands, so the next day starts there.
     return tripRoute(trip, (place) => travelTo(place, trip, names) ?? spotOf(place))
-      .filter((leg) => activeFocus === ALL || leg.dayId === activeFocus)
+      .filter((leg) => viewKey === ALL || leg.dayId === viewKey)
       .flatMap((leg) => {
         const from = located(leg.from);
         const to = located(leg.to);
         const day = trip.days.find((d) => d.id === leg.dayId);
         return from && to && day ? [{ from, to, color: dayColor(day) }] : [];
       });
-  }, [step, showRoute, trip, details, names, activeFocus]);
+  }, [step, showRoute, trip, details, names, viewKey]);
 
   // The places some days go to, counting the hotel a "Wake" or "Breakfast" happens at.
   const stopsOn = (dayIds: string[]) => {
@@ -281,7 +286,21 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
     }
     return [...ids];
   };
-  const focusedDay = activeFocus !== ALL && activeFocus !== UNSCHEDULED ? activeFocus : null;
+  const focusedDay = viewKey !== ALL && viewKey !== UNSCHEDULED ? viewKey : null;
+  /** The stop a card is at on the map: its own pin, the place it happens at, or where it travels to. */
+  const stopOfCard = (place: SavedPlace) => (isEntry(place) ? spotOf(place) ?? travelTo(place, trip, names) : place);
+  // A day in focus numbers its stops in schedule order, on the map and on its cards alike. The hotel keeps its house.
+  const stopNumbers = useMemo(() => {
+    const result: Record<string, number> = {};
+    if (!focusedDay) return result;
+    let next = 1;
+    for (const place of inDayOrder(trip.places.filter((p) => p.dayId === focusedDay))) {
+      const stop = stopOfCard(place);
+      if (stop && !stop.homeBase && !(stop.id in result)) result[stop.id] = next++;
+    }
+    return result;
+  }, [focusedDay, trip, names]);
+  const focusedColor = focusedDay ? trip.days.find((d) => d.id === focusedDay) : undefined;
 
   const pins = useMemo(() => {
     const result: MapPin[] = [];
@@ -296,8 +315,8 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
         id: place.id,
         placeId: place.placeId,
         location: info.location,
-        color: place.homeBase ? HOME_COLOR : day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : MAYBE_COLOR,
-        label: place.homeBase ? '' : day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
+        color: place.homeBase ? HOME_COLOR : stopNumbers[place.id] && focusedColor ? dayColor(focusedColor) : day ? dayColor(day) : place.mustHave ? MUST_HAVE_COLOR : MAYBE_COLOR,
+        label: place.homeBase ? '' : stopNumbers[place.id] ? String(stopNumbers[place.id]) : day ? String(dayNumber(trip, day.id)) : place.mustHave ? '★' : '•',
         home: place.homeBase,
         title: info.name,
         selected: ((place.id === selectedId || place.id === selectedSpotId) && !preview) || boxIds.includes(place.id),
@@ -315,7 +334,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
       });
     }
     return result;
-  }, [shown, details, trip, names, focusedDay, selectedId, selectedSpotId, preview, boxIds]);
+  }, [shown, details, trip, names, focusedDay, stopNumbers, selectedId, selectedSpotId, preview, boxIds]);
 
   const pending = shown.some((p) => !isEntry(p) && details[p.placeId] === undefined);
   // In the schedule the map frames the days showing on the board, or all of them when one is in focus.
@@ -539,10 +558,10 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   const stepButtons = (
     <div className="steps" role="group" aria-label="Planning steps">
       <button className={step === 'places' ? 'step active' : 'step'} aria-pressed={step === 'places'} onClick={() => goToStep('places')}>
-        <ListChecks size={18} aria-hidden="true" /> <b>1</b> Choose places
+        <ListChecks size={18} aria-hidden="true" /> <b>1</b> <span className="step-long">Choose places</span><span className="step-short">Places</span>
       </button>
       <button className={step === 'days' ? 'step active' : 'step'} aria-pressed={step === 'days'} onClick={() => goToStep('days')}>
-        <CalendarDays size={18} aria-hidden="true" /> <b>2</b> Plan days
+        <CalendarDays size={18} aria-hidden="true" /> <b>2</b> <span className="step-long">Plan days</span><span className="step-short">Days</span>
       </button>
     </div>
   );
@@ -615,6 +634,16 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             details={details}
             selectedId={selectedId}
             focus={activeFocus}
+            compact={narrow}
+            stopNumber={(place) => {
+              const stop = stopOfCard(place);
+              return stop ? stopNumbers[stop.id] ?? null : null;
+            }}
+            directionsTo={(place) => {
+              const stop = stopOfCard(place);
+              const info = stop ? details[stop.placeId] : undefined;
+              return stop && info && info !== 'error' ? directionsUrl(stop.placeId, info.name) : null;
+            }}
             unscheduledKey={UNSCHEDULED}
             canAutoGroup={city !== null && mustHaves.length + maybes.length > 0}
             onSelect={select}
@@ -747,8 +776,8 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
                   >
                     <SquareDashedMousePointer size={18} aria-hidden="true" /> Draw box
                   </button>
-                  <button className={showRoute ? 'map-route on' : 'map-route'} aria-pressed={showRoute} title="Show the trip as a dotted line" onClick={toggleRoute}>
-                    <Route size={18} aria-hidden="true" /> Route
+                  <button className={showRoute ? 'map-route on' : 'map-route'} aria-pressed={showRoute} title="Show the trip as a dotted line" aria-label="Route" onClick={toggleRoute}>
+                    <Route size={18} aria-hidden="true" /><span className="tool-label"> Route</span>
                   </button>
                 </div>
               )}

@@ -203,7 +203,13 @@ export function googleMapsUrl(placeId: string, name: string): string {
   return `https://www.google.com/maps/search/?api=1&${query}${id}`;
 }
 
-type AddressPart = { longText: string | null; types: string[] };
+/** Google Maps directions to a place from wherever the phone is. */
+export function directionsUrl(placeId: string, name: string): string {
+  const id = placeId.startsWith('demo:') ? '' : `&destination_place_id=${encodeURIComponent(placeId)}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(name)}${id}`;
+}
+
+type AddressPart ={ longText: string | null; types: string[] };
 
 const TOKYO_WARDS = new Set([
   'chiyoda', 'chuo', 'minato', 'shinjuku', 'bunkyo', 'taito', 'sumida', 'koto', 'shinagawa', 'meguro', 'ota', 'setagaya',

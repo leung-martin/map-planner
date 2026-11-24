@@ -1,7 +1,9 @@
 import { useState, type KeyboardEvent, type PointerEvent, type RefObject } from 'react';
 
-const KEY = 'mapplanner.mapShare';
-const DEFAULT = 0.27;
+// A phone shows one day's list at a time, so the map gets more of the height, remembered apart from a desktop's.
+const phone = window.matchMedia('(max-width: 760px)').matches;
+const KEY = phone ? 'mapplanner.mapShare.phone' : 'mapplanner.mapShare';
+const DEFAULT = phone ? 0.42 : 0.27;
 const MIN = 0.12;
 const MAX = 0.7;
 const clamp = (value: number) => Math.min(MAX, Math.max(MIN, value));

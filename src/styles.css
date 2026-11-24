@@ -565,3 +565,29 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .plan-place .search-results { position: static; max-height: 220px; }
 .plan-place-others input[type="checkbox"] { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: var(--accent-fill); }
 .plan-place-others span { flex: 1; min-width: 0; text-align: left; }
+
+/* Phones: one day fills the board and swipes to the next, and the map shows that day's stops by number. */
+.card-stop { flex: none; align-self: flex-start; display: grid; place-items: center; width: 24px; height: 24px; margin: 1px 8px 0 0; border-radius: 50%; color: #fff; font-size: 0.85rem; font-weight: 700; }
+.card-actions { display: flex; gap: 6px; padding: 6px 0 2px; }
+.card-actions .chip { flex: 1; justify-content: center; min-height: 40px; text-decoration: none; }
+.step-short { display: none; }
+@media (max-width: 760px) {
+  .step-long, .tool-label, .board-tools .bar-title, .map-draw { display: none; }
+  .step-short { display: inline; }
+  .board-tools { gap: 6px; padding: 6px 8px; }
+  .board-tools .chip.add { min-width: 40px; min-height: 40px; justify-content: center; padding: 0 8px; }
+  .day-jump { gap: 4px; }
+  .day-jump button { width: 34px; min-height: 34px; font-size: 0.95rem; }
+  .map-route { width: 40px; padding: 0; justify-content: center; }
+  .board.one-day { gap: 0; padding: 0; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .board.one-day > .column { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; border-width: 0 1px; }
+  .board.one-day > .column.tray-empty, .board.one-day > .column-add { display: none; }
+  .board.one-day .column-head { font-size: 1.1rem; }
+  .board.one-day .column-list { padding: 8px; }
+  .board-wrap:has(.one-day) .board-arrow { display: none; }
+  .day-step { flex: none; width: 40px; min-height: 40px; }
+  .day-step:disabled { opacity: 0.25; }
+  .board-wrap:has(.one-day)::before, .board-wrap:has(.one-day)::after { display: none; }
+  .schedule-bar .step { justify-content: center; }
+}
+.card-actions a.chip { border: 1px solid var(--accent-rule); background: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
