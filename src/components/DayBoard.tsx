@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, House, MapPin, MapPinned, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, House, MapPin, MapPinned, MapPinOff, LayoutGrid, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type FormEvent, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { PlaceDetails } from '../maps/provider';
@@ -35,6 +35,8 @@ type Props = {
   onDaysInView(dayIds: string[]): void;
   /** The pinned place a plan happens at, if it's one already on the map. */
   spotOf(place: SavedPlace): SavedPlace | null;
+  /** The place a plan names that has no pin yet, if any. */
+  unresolved(place: SavedPlace): string | null;
   /** What background scoring is doing, if anything. */
   status?: string;
 };
@@ -62,7 +64,7 @@ const formatDate = (date: string) =>
 
 export function DayBoard({
   trip, places, days, details, selectedId, focus, unscheduledKey, canAutoGroup,
-  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf, status,
+  onSelect, onMove, onMoveBeside, onMoveDay, onChangePlace, onNewDayFor, onAddPlan, onRemove, onFocus, onAddDay, onEditDay, onAutoGroup, onCheckPlaces, onDaysInView, spotOf, unresolved, status,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const board = useRef<HTMLDivElement>(null);
@@ -203,6 +205,7 @@ export function DayBoard({
     const spotDetails = spot ? details[spot.placeId] : undefined;
     const spotInfo = spotDetails && spotDetails !== 'error' ? spotDetails : null;
     const scores = place.scores ?? (spot && !spot.homeBase ? spot.scores : undefined);
+    const missing = isEntry(place) && !spot ? unresolved(place) : null;
     const column = days.find((day) => day.id === place.dayId);
     const canDropBeside = Boolean(dragging && column && dragging.id !== place.id && accepts(dragging, column));
     const lowerHalf = (event: DragEvent) => {
@@ -230,7 +233,7 @@ export function DayBoard({
         }}
       >
         <button
-          className={['card', place.id === selectedId && 'selected', isEntry(place) ? 'entry' : !place.mustHave && 'maybe'].filter(Boolean).join(' ')}
+          className={['card', place.id === selectedId && 'selected', isEntry(place) ? 'entry' : !place.mustHave && 'maybe', missing && 'unresolved'].filter(Boolean).join(' ')}
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData('text/plain', place.id);
@@ -248,10 +251,19 @@ export function DayBoard({
                 : place.mustHave && <span className="card-star" aria-label="Must-have">★ </span>}
               {nameOf(place)}
             </span>
-            {!isEntry(place) && <span className="card-location muted small">{info && info !== 'error' ? info.shortLocation : ' '}</span>}
+            {!isEntry(place) && (
+              <span className="card-location card-spot small">
+                <MapPin size={13} aria-hidden="true" /> {info && info !== 'error' ? info.shortLocation : ' '}
+              </span>
+            )}
             {spotInfo && (
               <span className="card-location card-spot small">
                 <MapPin size={13} aria-hidden="true" /> {spotInfo.name}
+              </span>
+            )}
+            {missing && (
+              <span className="card-location card-missing small" title="Pin it with Check places">
+                <MapPinOff size={13} aria-hidden="true" /> Not on the map: {missing}
               </span>
             )}
             {place.notes && <span className="card-note small">{place.notes}</span>}

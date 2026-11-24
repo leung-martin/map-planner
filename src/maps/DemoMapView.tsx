@@ -19,7 +19,7 @@ function boundsAround(points: LatLng[]): Bounds {
 }
 
 /** A plain stand-in for the Google map, used only when no API key is set. */
-export function DemoMapView({ pins, fitKey, fallback, fitIds, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
+export function DemoMapView({ pins, fitKey, fallback, fitIds, route = [], popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
   // As on the real map, the frame changes only when fitKey does.
   const latest = useRef({ pins, fallback, fitIds });
   latest.current = { pins, fallback, fitIds };
@@ -45,6 +45,23 @@ export function DemoMapView({ pins, fitKey, fallback, fitIds, popout, onPinClick
           {name}
         </button>
       ))}
+      {route.length > 0 && (
+        <svg className="demo-route" aria-hidden="true">
+          {route.map((leg, i) => (
+            <line
+              key={i}
+              x1={position(leg.from).left}
+              y1={position(leg.from).top}
+              x2={position(leg.to).left}
+              y2={position(leg.to).top}
+              stroke={leg.color}
+              strokeWidth={3}
+              strokeDasharray="2 8"
+              strokeLinecap="round"
+            />
+          ))}
+        </svg>
+      )}
       {pins.map((pin) => (
         <button
           key={pin.id}

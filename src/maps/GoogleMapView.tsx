@@ -69,10 +69,11 @@ function Popout({ map, location, children }: { map: google.maps.Map; location: L
   return createPortal(children, holder);
 }
 
-export function GoogleMapView({ pins, fitKey, fallback, fitIds, focusKey, popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
+export function GoogleMapView({ pins, fitKey, fallback, fitIds, focusKey, route = [], popout, onPinClick, onPoiClick, onViewChange }: MapViewProps) {
   const element = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const markers = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const lines = useRef<google.maps.Polyline[]>([]);
   const [libraries, setLibraries] = useState<Libraries | null>(null);
   const [error, setError] = useState('');
   const { resolved: theme } = useTheme();
@@ -135,6 +136,30 @@ export function GoogleMapView({ pins, fitKey, fallback, fitIds, focusKey, popout
       return marker;
     });
   }, [libraries, pins]);
+
+  // Dotted, with an arrow halfway to show which way the trip goes.
+  const routeKey = route.map((leg) => `${leg.from.lat},${leg.from.lng},${leg.to.lat},${leg.to.lng},${leg.color}`).join('|');
+  useEffect(() => {
+    if (!libraries || !map.current) return;
+    lines.current.forEach((line) => line.setMap(null));
+    lines.current = route.map(
+      (leg) =>
+        new libraries.maps.Polyline({
+          map: map.current,
+          path: [leg.from, leg.to],
+          geodesic: true,
+          clickable: false,
+          strokeOpacity: 0,
+          icons: [
+            { icon: { path: 'M 0,-1 0,1', strokeColor: leg.color, strokeOpacity: 0.95, strokeWeight: 3, scale: 3 }, offset: '0', repeat: '14px' },
+            {
+              icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, strokeColor: '#fff', strokeWeight: 1, fillColor: leg.color, fillOpacity: 1, scale: 3.5 },
+              offset: '50%',
+            },
+          ],
+        }),
+    );
+  }, [libraries, routeKey]);
 
   // Reframing depends only on fitKey, so changing a pin's day doesn't move the map.
   const latest = useRef({ pins, fallback, fitIds });

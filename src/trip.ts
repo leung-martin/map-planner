@@ -239,3 +239,23 @@ export function shortLocation(parts: AddressPart[]): string {
   const shown = [area, city].filter((text): text is string => Boolean(text));
   return shown.length > 0 ? [...new Set(shown)].join(', ') : (find('country') ?? '');
 }
+
+export type RouteLeg = { from: SavedPlace; to: SavedPlace; dayId: string };
+
+/**
+ * The trip's path in schedule order: a leg each time it moves to a different place.
+ * A plan counts at the pinned place it happens at (breakfast at the hotel), and one with no place is passed over.
+ */
+export function tripRoute(trip: Trip, spotOf: (place: SavedPlace) => SavedPlace | null): RouteLeg[] {
+  const legs: RouteLeg[] = [];
+  let last: SavedPlace | null = null;
+  for (const day of trip.days) {
+    for (const place of inDayOrder(trip.places.filter((p) => p.dayId === day.id))) {
+      const stop = isEntry(place) ? spotOf(place) : place;
+      if (!stop || stop.placeId === last?.placeId) continue;
+      if (last) legs.push({ from: last, to: stop, dayId: day.id });
+      last = stop;
+    }
+  }
+  return legs;
+}

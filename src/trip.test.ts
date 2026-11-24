@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   addCity, addDay, addPlace, addPlaces, assignableDays, cityOf, assignGroups, assignToNewDay, createTrip, dayLabel, dayNumber, googleMapsUrl, moveDay, moveDayOnto,
-  movePlaceBeside, movePlaceToEnd, removeCity, removeDay, shortLocation, tripNameFor, updateDay,
+  movePlaceBeside, movePlaceToEnd, removeCity, removeDay, shortLocation, tripNameFor, tripRoute, updateDay,
 } from './trip';
-import type { Trip } from './types';
+import type { SavedPlace, Trip } from './types';
 
 function parisRome() {
   let trip = createTrip('Italy and France');
@@ -221,5 +221,30 @@ describe('googleMapsUrl', () => {
     expect(googleMapsUrl('ChIJ1', 'Café & Co')).toBe(
       'https://www.google.com/maps/search/?api=1&query=Caf%C3%A9%20%26%20Co&query_place_id=ChIJ1',
     );
+  });
+});
+
+describe('tripRoute', () => {
+  const at = (id: string, dayId: string | null, extra: Partial<SavedPlace> = {}): SavedPlace => ({ id, placeId: `p-${id}`, cityId: 'c', dayId, notes: '', ...extra });
+  it('joins places in schedule order, through plans at a place, skipping repeats and plans with no place', () => {
+    const hotel = at('hotel', null, { homeBase: true });
+    const trip = {
+      id: 't', name: 'T', cities: [], updatedAt: 0,
+      days: [{ id: 'd1', cityIds: ['c'], date: null, colorIndex: 0 }, { id: 'd2', cityIds: ['c'], date: null, colorIndex: 1 }],
+      places: [
+        hotel,
+        at('shrine', 'd1', { time: '10:00' }),
+        at('wake', 'd1', { placeId: '', title: 'Wake', time: '07:00' }),
+        at('bus', 'd1', { placeId: '', title: 'Bus', time: '09:00' }),
+        at('dinner', 'd1', { time: '18:00' }),
+        at('sleep', 'd1', { placeId: '', title: 'Sleep', time: '23:00' }),
+        at('breakfast', 'd2', { placeId: '', title: 'Breakfast', time: '07:00' }),
+        at('market', 'd2', { time: '09:00' }),
+      ],
+    } as Trip;
+    const spotOf = (p: SavedPlace) => (['wake', 'sleep', 'breakfast'].includes(p.id) ? hotel : null);
+    expect(tripRoute(trip, spotOf).map((leg) => `${leg.from.id}>${leg.to.id}@${leg.dayId}`)).toEqual([
+      'hotel>shrine@d1', 'shrine>dinner@d1', 'dinner>hotel@d1', 'hotel>market@d2',
+    ]);
   });
 });

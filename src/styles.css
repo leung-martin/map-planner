@@ -536,3 +536,15 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
 .card-editor-spot > svg { flex: none; color: var(--accent); }
 .card-spot { display: flex; align-items: center; gap: 4px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-spot svg { flex: none; }
+.demo-route { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.map-overlay > .map-tools { display: flex; gap: 6px; box-shadow: none; justify-self: start; }
+.map-tools > * { box-shadow: 0 4px 14px rgb(0 0 0 / 35%); }
+.map-route { min-height: 40px; padding: 0 12px; border: 1px solid var(--line); background: var(--solid); color: var(--muted); }
+.map-route.on { border-color: var(--accent-rule); color: var(--accent); font-weight: 600; }
+/* What's on the map and what still needs a pin. */
+.card-missing { display: flex; align-items: center; gap: 4px; color: var(--danger); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root[data-theme="dark"] .card-missing { color: #ff9d85; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .card-missing { color: #ff9d85; } }
+.card-missing svg { flex: none; }
+.card.unresolved { border-left: 3px dashed var(--danger); }
+.card .card-spot { color: var(--accent); }

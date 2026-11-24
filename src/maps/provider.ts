@@ -38,6 +38,8 @@ export type MapPin = {
   home?: boolean;
 };
 
+export type RouteLine = { from: LatLng; to: LatLng; color: string };
+
 export type MapViewProps = {
   pins: MapPin[];
   /** When this changes the map reframes to the pins, or to `fallback` if there are none. */
@@ -47,6 +49,8 @@ export type MapViewProps = {
   fitIds?: string[];
   /** Changes each time the selected pin should be brought close again, even if it was already selected. */
   focusKey?: number;
+  /** Dotted lines from place to place, in the order the trip goes. */
+  route?: RouteLine[];
   /** A card shown attached to a point on the map. */
   popout: { location: LatLng; content: ReactNode } | null;
   onPinClick(id: string): void;

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, SquareDashedMousePointer, Upload, Users, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Globe, ListChecks, Plus, Sparkles, Route, SquareDashedMousePointer, Upload, Users, X } from 'lucide-react';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { groupByLocation } from '../autoGroup';
@@ -9,7 +9,7 @@ import type { Suggester } from '../suggest';
 import { useTheme } from '../theme';
 import { useScoring } from '../useScoring';
 import {
-  addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, updatePlace,
+  addCity, addDay, addEntry, addPlace, addPlaces, isEntry, assignGroups, assignPlaces, assignToNewDay, dayColor, dayNumber, MAYBE_COLOR, moveDayOnto, movePlaceBeside, movePlaceToEnd, removeCity, removePlace, tripRoute, updatePlace,
 } from '../trip';
 import type { Bounds, SavedPlace, Trip } from '../types';
 import { checkPlace } from '../checkPlaces';
@@ -96,9 +96,27 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   }, [daysInView, selectedId]);
   // Counts selections, so picking the same place again brings the map back to it.
   const [focusTick, setFocusTick] = useState(0);
+  // Picking a place shows the whole trip again, so a place on another day isn't hidden by a day in focus.
   const select = (id: string | null) => {
     setSelectedId(id);
-    if (id) setFocusTick((tick) => tick + 1);
+    if (!id) return;
+    setFocusTick((tick) => tick + 1);
+    setFocus(ALL);
+  };
+  const [showRoute, setShowRoute] = useState(() => {
+    try {
+      return localStorage.getItem('mapplanner.showRoute') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const toggleRoute = () => {
+    setShowRoute(!showRoute);
+    try {
+      localStorage.setItem('mapplanner.showRoute', showRoute ? 'off' : 'on');
+    } catch {
+      // Not remembered, but still switched.
+    }
   };
   // A trip through several cities opens on all of them, which is how an imported itinerary reads best.
   const [tab, setTab] = useState(trip.cities.length === 1 ? trip.cities[0].id : ALL);
@@ -178,6 +196,23 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
   const selectedPlace = trip.places.find((p) => p.id === selectedId);
   const selectedSpotId = selectedPlace ? spotOf(selectedPlace)?.id ?? null : null;
 
+  // The trip as a dotted line, place to place in schedule order, in the color of the day each leg is on.
+  const route = useMemo(() => {
+    if (step !== 'days' || !showRoute) return [];
+    const located = (place: SavedPlace) => {
+      const info = details[place.placeId];
+      return info && info !== 'error' ? info.location : null;
+    };
+    return tripRoute(trip, spotOf)
+      .filter((leg) => activeFocus === ALL || leg.dayId === activeFocus)
+      .flatMap((leg) => {
+        const from = located(leg.from);
+        const to = located(leg.to);
+        const day = trip.days.find((d) => d.id === leg.dayId);
+        return from && to && day ? [{ from, to, color: dayColor(day) }] : [];
+      });
+  }, [step, showRoute, trip, details, names, activeFocus]);
+
   const pins = useMemo(() => {
     const result: MapPin[] = [];
     for (const place of shown) {
@@ -211,9 +246,18 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
 
   const pending = shown.some((p) => !isEntry(p) && details[p.placeId] === undefined);
   // In the schedule the map frames the days showing on the board, or all of them when one is in focus.
-  const fitIds = step === 'days' && activeFocus === ALL && framedDays.length
-    ? shown.filter((p) => p.dayId && framedDays.includes(p.dayId)).map((p) => p.id)
-    : undefined;
+  // The places some days go to, counting the hotel a "Wake" or "Breakfast" happens at.
+  const stopsOn = (dayIds: string[]) => {
+    const ids = new Set<string>();
+    for (const place of trip.places) {
+      if (!place.dayId || !dayIds.includes(place.dayId)) continue;
+      const stop = isEntry(place) ? spotOf(place) : place;
+      if (stop) ids.add(stop.id);
+    }
+    return [...ids];
+  };
+  const focusedDay = activeFocus !== ALL && activeFocus !== UNSCHEDULED ? activeFocus : null;
+  const fitIds = step !== 'days' ? undefined : focusedDay ? stopsOn([focusedDay]) : framedDays.length ? stopsOn(framedDays) : undefined;
   const fitKey = [
     // The map is narrower in Plan days, so each step needs its own framing.
     step, activeTab, activeFocus, pending ? 'loading' : 'ready', cityBounds ? `${cityBounds.north},${cityBounds.west}` : '',
@@ -529,6 +573,10 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             onCheckPlaces={() => setChecking(true)}
             onDaysInView={setDaysInView}
             spotOf={spotOf}
+            unresolved={(place) => {
+              const check = checkPlace(place, trip, names);
+              return check.status === 'missing' ? check.query : null;
+            }}
             status={scoringMessage}
           />
         )}
@@ -541,6 +589,7 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
             fitKey={fitKey}
             fitIds={fitIds}
             focusKey={focusTick}
+            route={route}
             fallback={cityBounds}
             popout={preview && {
               location: preview.details.location,
@@ -622,15 +671,20 @@ export function TripView({ trip, provider, suggest, scorer, onChange, me }: Prop
                   <button className="icon-button" title="Cancel" aria-label="Cancel drawing" onClick={clearBox}><X size={20} aria-hidden="true" /></button>
                 </div>
               ) : (
-                <button
-                  className="primary map-draw"
-                  onClick={() => {
-                    setSelectedId(null);
-                    setDrawingBox(true);
-                  }}
-                >
-                  <SquareDashedMousePointer size={18} aria-hidden="true" /> Draw box
-                </button>
+                <div className="map-tools">
+                  <button
+                    className="primary map-draw"
+                    onClick={() => {
+                      setSelectedId(null);
+                      setDrawingBox(true);
+                    }}
+                  >
+                    <SquareDashedMousePointer size={18} aria-hidden="true" /> Draw box
+                  </button>
+                  <button className={showRoute ? 'map-route on' : 'map-route'} aria-pressed={showRoute} title="Show the trip as a dotted line" onClick={toggleRoute}>
+                    <Route size={18} aria-hidden="true" /> Route
+                  </button>
+                </div>
               )}
             </div>
           )}
