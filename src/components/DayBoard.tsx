@@ -121,6 +121,13 @@ export function DayBoard({
   useEffect(measure, [measure, days]);
 
   useEffect(() => onDaysInView(inView), [inView]);
+  // The row of day buttons scrolls too, so it keeps the day showing in view.
+  const jumpRow = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const row = jumpRow.current;
+    const button = row?.querySelector<HTMLElement>(".in-view");
+    if (row && button) row.scrollTo({ left: button.offsetLeft - row.offsetLeft - (row.clientWidth - button.offsetWidth) / 2, behavior: "smooth" });
+  }, [inView]);
 
   // The editor floats beside the selected card, or over the board when the place has no card (a home base).
   const editor = useRef<HTMLDivElement>(null);
@@ -361,7 +368,7 @@ export function DayBoard({
         <h2 className="bar-title">Days</h2>
         <p className="muted small grow board-hint" role="status">{status || 'Drag places onto days and into order. Drag a day’s heading to move the day.'}</p>
         {days.length > 1 && (
-          <nav className="day-jump" aria-label="Jump to a day">
+          <nav className="day-jump" ref={jumpRow} aria-label="Jump to a day">
             {days.map((day) => {
               const number = dayNumber(trip, day.id);
               return (
@@ -373,7 +380,7 @@ export function DayBoard({
                   aria-label={`Show day ${number}`}
                   onClick={() => jumpTo(day.id)}
                 >
-                  {number}
+                  <small>Day</small> {number}
                 </button>
               );
             })}
@@ -396,15 +403,6 @@ export function DayBoard({
         </button>
       )}
       <div className={compact ? 'board one-day' : 'board'} ref={board} onWheel={onWheel}>
-        <div className={`${columnClass(unscheduledKey, !draggingDayId)}${tray.length === 0 ? ' tray-empty' : ''}`} {...dropProps(unscheduledKey, null, !draggingDayId)}>
-          <h3 className="column-head">
-            <button className="column-title" aria-pressed={focus === unscheduledKey} onClick={() => onFocus(unscheduledKey)}>
-              To place <span className="muted small">{tray.length}</span>
-            </button>
-          </h3>
-          <ul className="column-list">{tray.map(card)}</ul>
-        </div>
-
         {days.map((day, index) => {
           const number = dayNumber(trip, day.id);
           const [before, after] = [days[index - 1], days[index + 1]];
@@ -450,6 +448,16 @@ export function DayBoard({
         })}
 
         <button className="column-add" onClick={onAddDay}><Plus size={18} aria-hidden="true" /> Add a day</button>
+
+        {/* Places not on a day yet come last, after the days themselves. */}
+        <div className={`${columnClass(unscheduledKey, !draggingDayId)}${tray.length === 0 ? ' tray-empty' : ''}`} {...dropProps(unscheduledKey, null, !draggingDayId)}>
+          <h3 className="column-head">
+            <button className="column-title" aria-pressed={focus === unscheduledKey} onClick={() => onFocus(unscheduledKey)}>
+              To place <span className="muted small">{tray.length}</span>
+            </button>
+          </h3>
+          <ul className="column-list">{tray.map(card)}</ul>
+        </div>
       </div>
       </div>
 

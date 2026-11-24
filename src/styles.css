@@ -591,3 +591,9 @@ kbd { font: inherit; font-weight: 600; color: var(--accent); }
   .schedule-bar .step { justify-content: center; }
 }
 .card-actions a.chip { border: 1px solid var(--accent-rule); background: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
+/* Day buttons read "Day 3", with the word small beside the number. */
+.day-jump button { width: auto; padding: 0 7px; white-space: nowrap; }
+.day-jump button small { font-size: 0.68rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
+@media (max-width: 760px) {
+  .day-jump button { width: auto; padding: 0 8px; }
+}
